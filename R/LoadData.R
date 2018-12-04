@@ -1,9 +1,9 @@
-LoadPerimetre<-function(dir){
+LoadPerimetre<-function(dossier){
   #1b P?rim?tre----
-  lf<-list.files(dir,pattern=".csv",full.names=T)
+  lf<-list.files(dossier,pattern=".csv",full.names=T)
   lfperimma<-lf[regexpr("MA_REFST_TLRLV_GRD",lf)>0]
   if(length(lfperimma)==0){
-    logprint(paste("Pas de p?rim?tre MA dans",dir,"\n"))
+    logprint(paste("Pas de p?rim?tre MA dans",dossier,"\n"))
     perimma=data.frame(CODE_ENTITE=NA,CAPA_MAX_H_SITE=NA,TYPE_SITE=NA,TYPE_CONTRAT=NA,ID_SITE=NA,CATEGORIE=NA,mecanisme=NA)[0,]
   }else{
     perimma<-suppressWarnings(read_csv2(file = lfperimma[length(lfperimma)], skip = 2, col_names = TRUE, comment = "<EOF>"))
@@ -12,7 +12,7 @@ LoadPerimetre<-function(dir){
   }
   lfperimnebef<-lf[regexpr("NEBEF_REFST_TLRLV_GRD",lf)>0 | regexpr("NEBEF_REFST_TLRV_GRD",lf)>0]
   if(length(lfperimnebef)==0){
-    logprint(paste("Pas de p?rim?tre Nebef dans",dir,"\n"))
+    logprint(paste("Pas de p?rim?tre Nebef dans",dossier,"\n"))
     perimnebef=data.frame(CODE_ENTITE=NA,CAPA_MAX_H_SITE=NA,TYPE_SITE=NA,TYPE_CONTRAT=NA,ID_SITE=NA,CATEGORIE=NA,mecanisme=NA)[0,]
   }else{
     perimnebef<-suppressWarnings(read_csv2(file = lfperimnebef[length(lfperimnebef)], skip = 2, col_names = TRUE, comment = "<EOF>"))
@@ -30,36 +30,36 @@ LoadPerimetre<-function(dir){
 
 #' Chargement des fichiers de programme d'effacements retenus et d'ordres d'activations consolidés en J+3 aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
-#' @param dir le nom du répertoire contenant les fichiers passés en paramètre
+#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
 #'
 #' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, debut, fin, DMO, SIGNE
 #' @export
 #' @import reshape2
 #' @import tidyverse
 #' @examples
-LoadEffacements<-function(dir){
-  
-  logprint(paste("Imports des effacements/OA dans le dossier",dir,"\n"))
-  
-  lf<-list.files(dir,full.names = T,recursive = T)
+LoadEffacements<-function(dossier){
+
+  logprint(paste("Imports des effacements/OA dans le dossier",dossier,"\n"))
+
+  lf<-list.files(dossier,full.names = T,recursive = T)
   #Fichiers des ordres d'ajustements
-  lfoa <- list.files(path = dir,pattern = "OA_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",full.names = TRUE)
+  lfoa <- list.files(path = dossier,pattern = "OA_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",full.names = TRUE)
   lfoa <- file.info(lfoa,extra_cols = TRUE)
   lfoa$Lien <- rownames(lfoa)
   rownames(lfoa) <- NULL
-  
+
   #Horodate de cr?ation figurant dans le nom du fichier
-  lfoa$HorodateCreation = as.POSIXct(x = gsub(x = lfoa$Lien, pattern = paste(dir,"OA_GRD_[0-9]{8}_[0-9A-Z]{16}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
-  
+  lfoa$HorodateCreation = as.POSIXct(x = gsub(x = lfoa$Lien, pattern = paste(dossier,"OA_GRD_[0-9]{8}_[0-9A-Z]{16}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
+
   #Journ?e d'effacement correspondante
-  lfoa$JourOA = as.Date(x = gsub(x = lfoa$Lien, pattern = paste(dir,"OA_GRD_([0-9]{8})_[0-9A-Z]{16}_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
-  
+  lfoa$JourOA = as.Date(x = gsub(x = lfoa$Lien, pattern = paste(dossier,"OA_GRD_([0-9]{8})_[0-9A-Z]{16}_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
+
   #Tri des fichiers par Jour et horodate de cr?ation
   lfoa <- lfoa[order(lfoa$JourOA,lfoa$HorodateCreation, decreasing = TRUE),]
-  
+
   #D?doublonnage des fichiers de CdC en selectionnant les plus r?cents par Jour d'effacement
   lfoa <- lfoa[!duplicated(lfoa[,c('JourOA')]),]
-  
+
   if(length(lfoa$Lien)>0){
     for(oa0 in lfoa$Lien){
       suppressWarnings(oa1<-read.csv2(oa0,skip=2, stringsAsFactors = FALSE))
@@ -89,32 +89,32 @@ LoadEffacements<-function(dir){
     debut<-oa5[oa5$PUISSANCE>0 & (oa5$PUISSANCE_avant==0 | oa5$CODE_ENTITE!=oa5$CODE_ENTITE_avant | 1:nrow(oa5)==1),]
     fin<-oa5[oa5$PUISSANCE>0 & (oa5$PUISSANCE_apres==0 | oa5$CODE_ENTITE!=oa5$CODE_ENTITE_apres | 1:nrow(oa5)==nrow(oa5)),]
     oa<-data.frame(CODE_ENTITE=debut$CODE_ENTITE,debut=debut$HORODATE,fin=fin$HORODATE+60,DMO=debut$DMO,SIGNE=sign(debut$PUISSANCE))
-    
+
   }else{
-    logprint(paste("Pas de fichier OA dans",dir,"\n"))
+    logprint(paste("Pas de fichier OA dans",dossier,"\n"))
     oa<-data.frame(CODE_ENTITE=NA,debut=NA,fin=NA,DMO=NA,SIGNE=NA)[0,]
   }
   #Fichiers de programme d'Effacement Retenus
-  lfpec <- list.files(path = dir,pattern = "PEC_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",full.names = TRUE)
+  lfpec <- list.files(path = dossier,pattern = "PEC_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",full.names = TRUE)
   lfpec <- file.info(lfpec,extra_cols = TRUE)
   lfpec$Lien <- rownames(lfpec)
   rownames(lfpec) <- NULL
-  
+
   #Horodate de cr?ation figurant dans le nom du fichier
-  lfpec$HorodateCreation = as.POSIXct(x = gsub(x = lfpec$Lien, pattern = paste(dir,"PEC_GRD_[0-9]{8}_[0-9A-Z]{16}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
-  
+  lfpec$HorodateCreation = as.POSIXct(x = gsub(x = lfpec$Lien, pattern = paste(dossier,"PEC_GRD_[0-9]{8}_[0-9A-Z]{16}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
+
   #Journ?e d'effacement correspondante
-  lfpec$JourEffacement = as.Date(x = gsub(x = lfpec$Lien, pattern = paste(dir,"PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
-  
+  lfpec$JourEffacement = as.Date(x = gsub(x = lfpec$Lien, pattern = paste(dossier,"PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
+
   #Tri des fichiers par Jour et horodate de cr?ation
   lfpec <- lfpec[order(lfpec$JourEffacement,lfpec$HorodateCreation, decreasing = TRUE),]
-  
+
   #D?doublonnage des fichiers de CdC en selectionnant les plus r?cents par Jour d'effacement
   lfpec <- lfpec[!duplicated(lfpec[,c('JourEffacement')]),]
-  
+
   #Fichiers non vides (sup?rieur ? 367 octets)
   lfpec <- lfpec[which(lfpec$size > 367),]
-  
+
   pecs4<-data.frame(debut=NA,fin=NA,CODE_ENTITE=NA,DMO=NA)[0,]
   if(nrow(lfpec)>0){
     pecs<-pecs4
@@ -131,70 +131,76 @@ LoadEffacements<-function(dir){
       pecs<-pecs[!duplicated(pecs[,c("CODE_EDE","DATE")]),]
       pecs2<-melt(pecs,measure.vars=names(pecs)[substr(names(pecs),1,3)=="VAL"])
       pecs2$variable2<-as.numeric(substr(as.character(pecs2$variable),4,nchar(as.character(pecs2$variable))))
-      
+
       pecs2<-pecs2[pecs2$variable2<=pecs$NB_PTS_CHRONIQUE,]#Filtre sur les demi heures au del? de 48
       pecs2<-pecs2[order(pecs2$CODE_EDE,pecs2$DATE,pecs2$variable2),]
-      
+
       pecs2$horodate<-as.POSIXct(as.character(pecs2$DATE),format="%Y%m%d", tz = 'CET')
       pecs2$horodate<-pecs2$horodate+(pecs2$variable2-1)*30*60
       pecs2$horodate30utc<-as.POSIXct(floor(as.numeric(as.POSIXct(format(pecs2$horodate,tz="UTC"),tz="UTC"))/1800)*1800,origin="1970-01-01",tz="UTC")
-      
+
       pecs4 = chron2prog(tbl_ts = pecs2, char_group = 'CODE_EDE', char_pow = 'value', char_datetime = 'horodate30utc') %>%
         rename(CODE_ENTITE = group, debut = begin, fin = end, SIGNE = sign) %>%
         add_column(DMO = NA, .before = 'SIGNE') %>%
         mutate(debut = with_tz(debut,tzone = 'CET'), fin = with_tz(fin,tzone = 'CET'))
-      
+
       # avant<-rbind(c(NA,NA,NA),pecs2[-nrow(pecs2),c("CODE_EDE","value","horodate30utc")])
       # apres<-rbind(pecs2[-1,c("CODE_EDE","value","horodate30utc")],c(NA,NA,NA))
       # pecs3<-cbind(pecs2[,c("horodate30utc","horodate","CODE_EDE","value")],avant,apres)
       # names(pecs3)[5:10]<-c("CODE_EDE_avant","value_avant","horodate30utc_avant","CODE_EDE_apres","value_apres","horodate30utc_apres")
       # debut<-pecs3[pecs3$value>0 & (pecs3$value_avant==0 | pecs3$CODE_EDE!=pecs3$CODE_EDE_avant | 1:nrow(pecs3)==1 | as.POSIXct(pecs3$horodate30utc)!=as.POSIXct(pecs3$horodate30utc_avant)+30*60),]
       # fin<-pecs3[pecs3$value>0 & (pecs3$value_apres==0 | pecs3$CODE_EDE!=pecs3$CODE_EDE_apres | 1:nrow(pecs3)==nrow(pecs3) | as.POSIXct(pecs3$horodate30utc)!=as.POSIXct(pecs3$horodate30utc_apres)-30*60),]
-      # 
+      #
       # pecs4<-data.frame(CODE_ENTITE=debut$CODE_EDE,debut=debut$horodate,fin=fin$horodate+30*60,DMO=rep(NA,nrow(debut)))
     }else{
-      logprint(paste("Tous les fichiers PEC sont vides dans ",dir,"\n"))
+      logprint(paste("Tous les fichiers PEC sont vides dans ",dossier,"\n"))
     }
   }else{
-    logprint(paste("Pas de fichier PEC dans",dir,"\n"))
+    logprint(paste("Pas de fichier PEC dans",dossier,"\n"))
   }
   effacements<-rbind(oa[,names(pecs4)],pecs4)
-  logprint(paste(nrow(effacements),"effacements dans le dossier",dir))
-  
+  logprint(paste(nrow(effacements),"effacements dans le dossier",dossier))
+
   return(effacements)
 }
 
 #' Chargement des fichiers de courbes de charges aux formats prévues dans les règles SI décrivant les flux en provenance des GRD à destination de RTE
 #'
-#' @param dir le nom du répertoire contenant les fichiers passés en paramètre (facultatif)
-#' @param files un vecteur contenant les noms des fichiers de courbes de charges
+#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre (facultatif)
+#' @param fichiers un vecteur contenant les noms des fichiers de courbes de charges
 #'
 #' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, PUISSANCE
 #' @export
 #' @import tidyverse
+#' @import lubridate
 #' @examples
-LoadCdC<-function(files, dir = NULL){
-  
-  if(!is.null(dir)) files <- paste(dir, files, sep = "/") #Si le dossier n'est pas spécifié alors les chemins des fichiers sont absolus
-  
+LoadCdC<-function(fichiers, dossier = NULL){
+
+  if(!is.null(dossier)) fichiers <- paste(dossier, fichiers, sep = "/") #Si le dossier n'est pas spécifié alors les chemins des fichiers sont absolus
+
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
-  if(all(regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",files)<0))
+  if(all(regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv", fichiers) < 0))
   {
     stop('aucun fichier conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
-    
+
   }else{
-    
-    map_dfr( 
-      .x = files
+
+    if(any(regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv", fichiers) < 0))
+    {
+      filter(fichiers, regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv", fichiers) < 0)
+    }
+
+    map_dfr(
+      .x = fichiers
       , .f = function(fichier){
         if(regexpr("CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv",fichier)>0){ # Traitement des fichiers MA
-          
+
           read_delim(
             file = fichier
             , delim = ';'
             , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
             , comment = '<EOF>'
-            , col_types = 
+            , col_types =
               list(
                 CODE_EDA = 'c'
                 , CODE_SITE = 'c'
@@ -211,17 +217,17 @@ LoadCdC<-function(files, dir = NULL){
             mutate(MINUTE = (60 * 24 * MINUTE)/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
             mutate(HORODATE = force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
             transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
-          
+
         }
-        
+
         if(regexpr("NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",fichier)>0){ # Traitement des fichiers NEBEF
-          
+
           read_delim(
             file = fichier
             , delim = ';'
             , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
             , comment = '<EOF>'
-            , col_types = 
+            , col_types =
               list(
                 CODE_EDE = 'c'
                 , CODE_EXT_SITE = 'c'
@@ -246,12 +252,12 @@ LoadCdC<-function(files, dir = NULL){
   }
 }
 
-LoadListeEntt<-function(dir=""){
+LoadListeEntt<-function(dossier=""){
   for(type in c("A","E")){
-    lfle<-list.files(dir,pattern=paste0("LISTE_ED",type,"_GRD_"))
+    lfle<-list.files(dossier,pattern=paste0("LISTE_ED",type,"_GRD_"))
     lfle<-lfle[regexpr(".csv",lfle)>0]
     if(length(lfle)>0){
-      suppressWarnings(ListeEntt1<-read.csv2(paste(dir,lfle[length(lfle)],sep="/"), stringsAsFactors = FALSE))
+      suppressWarnings(ListeEntt1<-read.csv2(paste(dossier,lfle[length(lfle)],sep="/"), stringsAsFactors = FALSE))
       names(ListeEntt1)[names(ListeEntt1)==paste0("CODE_ED",type)]<-"CODE_ENTITE"
       ListeEntt1<-ListeEntt1[,c("CODE_ENTITE","METHODE_CONTROLE_REALISE")]
       if(exists("ListeEntt"))ListeEntt<-rbind(ListeEntt,ListeEntt1)else ListeEntt<-ListeEntt1
@@ -263,13 +269,13 @@ LoadListeEntt<-function(dir=""){
   return(ListeEntt)
 }
 
-LoadSitesHomol<-function(dir=""){
-  lfsh<-list.files(dir,pattern="_SITES_HOMOL_GRD_")
+LoadSitesHomol<-function(dossier=""){
+  lfsh<-list.files(dossier,pattern="_SITES_HOMOL_GRD_")
   lfsh<-lfsh[regexpr(".csv",lfsh)>0]
-  lfsh<-lfsh[file.info(paste(dir,lfsh,sep="/"))$size>170]
+  lfsh<-lfsh[file.info(paste(dossier,lfsh,sep="/"))$size>170]
   sh<-list()
   for(f in lfsh){
-    sh[[length(sh)+1]]<-read.csv2(paste(dir,f,sep="/"),skip=2, stringsAsFactors = FALSE)
+    sh[[length(sh)+1]]<-read.csv2(paste(dossier,f,sep="/"),skip=2, stringsAsFactors = FALSE)
   }
   if(length(sh)>0){
     shh<-do.call("rbind",sh)
@@ -284,12 +290,12 @@ LoadSitesHomol<-function(dir=""){
 }
 
 LoadIndHist<-function(dirs=""){#on charge le dernier fichier Indispo connu
-  lf<-list.files(dir,pattern="NEBEF_INDHIST_GRD_")
+  lf<-list.files(dossier,pattern="NEBEF_INDHIST_GRD_")
   lf<-lf[regexpr(".csv",lf)>0]
   if(length(lf)>0){
     IndHist1<-list()
     for(f in lf){
-      IndHist1[[which(lf==f)]]<-read.csv2(paste(dir,f,sep="/"),skip=2, stringsAsFactors = FALSE)[,c("CODE_EXT_SITE","DATE_INDISPO")]
+      IndHist1[[which(lf==f)]]<-read.csv2(paste(dossier,f,sep="/"),skip=2, stringsAsFactors = FALSE)[,c("CODE_EXT_SITE","DATE_INDISPO")]
     }
     IndHist<-do.call("rbind",IndHist1)
   }else{
@@ -298,121 +304,131 @@ LoadIndHist<-function(dirs=""){#on charge le dernier fichier Indispo connu
   }
   names(IndHist)[names(IndHist)=="CODE_EXT_SITE"]<-"CODE_SITE"
   IndHist$DATE_INDISPO<-format(as.Date(as.character(IndHist$DATE_INDISPO),format="%Y%m%d"),format="%Y-%m-%d")
-  return(unique(IndHist)) 
+  return(unique(IndHist))
 }
 
-LoadPEIF<-function(dir=""){}
+LoadPEIF<-function(dossier=""){}
 
-LoadPrev<-function(dir, pas = 600){
-  if(dir.exists(dir))
+#' Title
+#'
+#' @param dossier
+#' @param pas
+#'
+#' @return
+#' @export
+#' @import tidyverse
+#' @examples
+LoadPrev<-function(dossier, pas = 600){
+
+  if(dossier.exists(dossier))
   {
     #Fichiers de programme d'Effacement Retenus
-    lfprev <- list.files(path = dir,pattern = "_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_[0-9]{14}.csv",full.names = TRUE)
+    lfprev <- list.files(path = dossier, pattern = "_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_[0-9]{14}.csv", full.names = TRUE)
     lfprev <- file.info(lfprev,extra_cols = TRUE)
-    lfprev$Lien <- rownames(lfprev)
-    rownames(lfprev) <- NULL
-    
-    #Horodate de création figurant dans le nom du fichier
-    lfprev$HorodateCreation = as.POSIXct(x = gsub(x = lfprev$Lien, pattern = paste(dir,"_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
-    
-    #Journee d'effacement correspondante
-    lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dir,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
-    
-    #M?canisme
-    lfprev$Mec = substr(gsub(dir,"",lfprev$Lien),2,4)
-    
-    #Tri des fichiers par Jour et horodate de création
-    lfprev <- lfprev[order(lfprev$JourPrevision,lfprev$HorodateCreation, decreasing = TRUE),]
-    
-    #Dédoublonnage des fichiers de CdC en selectionnant les plus récents par Jour d'effacement
-    lfprev <- lfprev[!duplicated(lfprev[,c('JourPrevision','Mec')]),]
-    
-    #Fichiers non vides (superieur a 390 octets)
-    lfprev <- lfprev[which(lfprev$size > 390),]
-    
-    prevData <- data.frame(CODE_ENTITE = NA, CODE_SITE = NA, horodate = NA, horodateutc = NA, puissance = NA)[0,]
-    
-    if( nrow(lfprev) > 0 ){
-      
-      for(i in 1:nrow(lfprev)){
-        
-        prevFile <- lfprev[i,]
-        
-        prevDataTemp <- suppressWarnings(read.table(file = prevFile$Lien, skip = 2, fill = TRUE, comment.char = "<", header = TRUE, sep = ';',dec = ',', stringsAsFactors = FALSE))
-        
-        for(j in 1:nrow(prevDataTemp))
-        {
-          #Jour de prévision
-          jour <- as.Date.character(x = prevDataTemp$DATE[j], format = "%Y%m%d")
-          
-          #Début de la chronique
-          deb <- as.POSIXct(x = paste(jour, '00:00:00'))
-          
-          #Entité correspondante
-          EDE <- as.character(prevDataTemp$CODE_EDE[j])
-          
-          Site <- as.character(prevDataTemp$CODE_EXT_SITE[j]) 
-          
-          #Nombre de points de CdC pour ce "jour"
-          NbPts <- prevDataTemp$NB_PTS_CHRONIQUE[j]
-          
-          #Définition du pas de temps
-          pdt <-  switch(EXPR = as.character(NbPts)
-                         , '48' = 1800
-                         , '50' = 1800
-                         , '36' = 1800
-                         , '136' = 600
-                         , '144' = 600
-                         , '150' = 600)
-          
-          #Fin de la chronique
-          fin <- as.POSIXct(x = paste(jour + 1, '00:00:00')) - pdt
-          
-          #création de la chronique
-          chron <- seq.POSIXt(from = deb, by = pdt, to = fin)
-          
-          chronUTC <- chron
-          attr(chronUTC, "tzone") <- "UTC"
-          
-          #Valeurs de puissance exprimée en kW (Attention aux chiffres significatifs)
-          puissance <- as.numeric(unlist(prevDataTemp[j,paste('VAL',1:NbPts,sep='')], use.names = FALSE))
-          
-          tempdata = cbind.data.frame(CODE_ENTITE = EDE, CODE_SITE = Site, horodate = chron, horodateutc = chronUTC, puissance = puissance, stringsAsFactors = FALSE)
-          
-          
-          if(pdt > pas)
-          {
-            tempdata = as.data.frame(apply(tempdata, MARGIN = 2, FUN = function(x){rep(x, each = pdt/pas)}))
-            tempdata$horodate = seq.POSIXt(from = deb, by = pas, to = as.POSIXct(x = paste(jour + 1, '00:00:00')) - pas)
-            tempdata$horodateutc = tempdata$horodate
-            attr(tempdata$horodateutc, "tzone") <- "UTC"
-          }
-          
-          #Compilation des effacements
-          prevData <- rbind.data.frame(prevData, tempdata)
-          
-        }
-        
+    lfprev$Lien = rownames(lfprev)
+rownames(lfprev) <- NULL
+
+#Horodate de création figurant dans le nom du fichier
+lfprev$HorodateCreation = as.POSIXct(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
+
+#Journee d'effacement correspondante
+lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
+
+#M?canisme
+lfprev$Mec = substr(gsub(dossier,"",lfprev$Lien),2,4)
+
+#Tri des fichiers par Jour et horodate de création
+lfprev <- lfprev[order(lfprev$JourPrevision,lfprev$HorodateCreation, decreasing = TRUE),]
+
+#Dédoublonnage des fichiers de CdC en selectionnant les plus récents par Jour d'effacement
+lfprev <- lfprev[!duplicated(lfprev[,c('JourPrevision','Mec')]),]
+
+#Fichiers non vides (superieur a 390 octets)
+lfprev <- lfprev[which(lfprev$size > 390),]
+
+prevData <- data.frame(CODE_ENTITE = NA, CODE_SITE = NA, horodate = NA, horodateutc = NA, puissance = NA)[0,]
+
+if( nrow(lfprev) > 0 ){
+
+  for(i in 1:nrow(lfprev)){
+
+    prevFile <- lfprev[i,]
+
+    prevDataTemp <- suppressWarnings(read.table(file = prevFile$Lien, skip = 2, fill = TRUE, comment.char = "<", header = TRUE, sep = ';',dec = ',', stringsAsFactors = FALSE))
+
+    for(j in 1:nrow(prevDataTemp))
+    {
+      #Jour de prévision
+      jour <- as.Date.character(x = prevDataTemp$DATE[j], format = "%Y%m%d")
+
+      #Début de la chronique
+      deb <- as.POSIXct(x = paste(jour, '00:00:00'))
+
+      #Entité correspondante
+      EDE <- as.character(prevDataTemp$CODE_EDE[j])
+
+      Site <- as.character(prevDataTemp$CODE_EXT_SITE[j])
+
+      #Nombre de points de CdC pour ce "jour"
+      NbPts <- prevDataTemp$NB_PTS_CHRONIQUE[j]
+
+      #Définition du pas de temps
+      pdt <-  switch(EXPR = as.character(NbPts)
+                     , '48' = 1800
+                     , '50' = 1800
+                     , '36' = 1800
+                     , '136' = 600
+                     , '144' = 600
+                     , '150' = 600)
+
+      #Fin de la chronique
+      fin <- as.POSIXct(x = paste(jour + 1, '00:00:00')) - pdt
+
+      #création de la chronique
+      chron <- seq.POSIXt(from = deb, by = pdt, to = fin)
+
+      chronUTC <- chron
+      attr(chronUTC, "tzone") <- "UTC"
+
+      #Valeurs de puissance exprimée en kW (Attention aux chiffres significatifs)
+      puissance <- as.numeric(unlist(prevDataTemp[j,paste('VAL',1:NbPts,sep='')], use.names = FALSE))
+
+      tempdata = cbind.data.frame(CODE_ENTITE = EDE, CODE_SITE = Site, horodate = chron, horodateutc = chronUTC, puissance = puissance, stringsAsFactors = FALSE)
+
+
+      if(pdt > pas)
+      {
+        tempdata = as.data.frame(apply(tempdata, MARGIN = 2, FUN = function(x){rep(x, each = pdt/pas)}))
+        tempdata$horodate = seq.POSIXt(from = deb, by = pas, to = as.POSIXct(x = paste(jour + 1, '00:00:00')) - pas)
+        tempdata$horodateutc = tempdata$horodate
+        attr(tempdata$horodateutc, "tzone") <- "UTC"
       }
-      prevData$puissance<-as.numeric(prevData$puissance)
-    }else{
-      
-      logprint(paste("Pas de fichier prev dans",dir))
+
+      #Compilation des effacements
+      prevData <- rbind.data.frame(prevData, tempdata)
+
     }
-    
-    return(prevData)
-    
+
+  }
+  prevData$puissance<-as.numeric(prevData$puissance)
+}else{
+
+  logprint(paste("Pas de fichier prev dans",dossier))
+}
+
+return(prevData)
+
   }else{
-    
-    logprint(paste("Dossier",dir,"introuvable !"))
-    
+
+    logprint(paste("Dossier",dossier,"introuvable !"))
+
   }
 }
 
 logprint<-function(logText, logFileName = NULL){
-  
+
   if(is.null(logFileName))
     logFileName = paste0(getwd(), '/Exec-', format(Sys.time(), '%Y%m%d%H%M%S'),'.log')
-  
+
   write.table(logText, logFileName, append = TRUE, row.names = FALSE, col.names = FALSE, quote = FALSE)
 }

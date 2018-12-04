@@ -3,7 +3,7 @@
 #Mettre ? TRUE si vous souhaitez que toutes les courbes de charge CARD soient calcul?es (m?me ? nul, lorsqu'il n'y a pas d'effacement)
 #Mettre ? FALSE si vous souhaitez que seules les lignes ID*DATE concernees par un effacement ne soient calcul?es
 cdcnul<-TRUE
-  
+
 ## Outils de calcul des chroniques d'effacement des sites soumis au modele corrige
 
 # DIR_DATA <- "c:/8-OutilsPRE/10-MA_NEBEF/7-ModeleCorrige/Outils GRD HP v0.x/MODELE_CORRIGE/data"
@@ -25,7 +25,7 @@ DIR_SCRIPT <- gsub(x = args[2], pattern = "\\\\", replacement = "/")
 # DIR_DATA <- paste0(getwd(),"/data-raw")
 # DIR_SCRIPT <- paste0(getwd(),"/R")
 
-if(!dir.exists(paste(DIR_SCRIPT,"/log",sep="")))dir.create(paste(DIR_SCRIPT,"/log",sep=""))
+if(!dossier.exists(paste(DIR_SCRIPT,"/log",sep="")))dossier.create(paste(DIR_SCRIPT,"/log",sep=""))
 logfilename<-paste(DIR_SCRIPT,"/log/log",format(Sys.time(),"_%Y%m%d_%H%M%S.txt"),sep="")
 logprint<-function(string){
   cat(string)
@@ -56,7 +56,7 @@ strscan <- function(x, split=" ", pos)
   return(sapply(X = strsplit(x = x,split = split), FUN = function(x){n = length(x);if(abs(pos)>n|pos == 0) stop("position incorrecte") ; if(pos<0) pos = pos%%n + 1 ; return(x[pos])}))
 }
 
-#Code EIC du GRD 
+#Code EIC du GRD
 EIC <- gsub(x = grep(list.files(DIR_DATA,recursive = T),pattern = "[0-9]{6}/(MA_REFST_TLRLV_GRD|NEBEF_REFST_TLRLV_GRD)_[0-9]{6}_([0-9A-Z]{16})_[0-9]{14}.csv$",value = TRUE),pattern = "[0-9]{6}/(MA_REFST_TLRLV_GRD|NEBEF_REFST_TLRLV_GRD)_[0-9]{6}_([0-9A-Z]{16})_[0-9]{14}.csv$",replacement = "\\2")[1]
 if(is.na(EIC))EIC<-"17X9999999999999"
 
@@ -67,7 +67,7 @@ Fichiers <- data.frame(Lien = list.files(full.names = TRUE, include.dirs = TRUE,
 Fichiers$Nom <- strscan(x = as.character(Fichiers$Lien), split = '/', pos = -1)
 Fichiers$Dossier <- strscan(x = as.character(Fichiers$Lien), split = '/', pos = -2)
 Fichiers$Mecanisme <- gsub(x = strscan(x = Fichiers$Nom,split =  '_', pos =  1) , pattern = "CRMA", replacement = "MA")
-Fichiers$Type <- ifelse(test = strscan(Fichiers$Nom,split = '_',pos = 2) == "CRMODECORRIGE", yes = "CRMC", no = "CDC") 
+Fichiers$Type <- ifelse(test = strscan(Fichiers$Nom,split = '_',pos = 2) == "CRMODECORRIGE", yes = "CRMC", no = "CDC")
 Fichiers$Periode <- gsub(x = Fichiers$Nom, pattern = "(MA|NEBEF)_CRMODECORRIGE_([0-9]{6,8})_[0-9A-Z]{16}_[0-9]{14}.csv|CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_([0-9]{8}).csv|NEBEF_CRS_GRD_([0-9]{8})_[0-9A-Z]{16}_[0-9]{14}.csv", replacement = "\\2\\3\\4")
 Fichiers$Source <- ifelse(test = nchar(Fichiers$Periode) == 6, yes = "RTE", no = "GRD")
 Fichiers$HorodateCreation <- as.POSIXct(x = gsub(x = gsub(x = Fichiers$Nom, pattern = "(MA|NEBEF)_CRMODECORRIGE_[0-9]{6,8}_[0-9A-Z]{16}_([0-9]{14}).csv|CRMA_[0-9]{4}_([0-9]{8}_[0-9]{6})_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_([0-9]{14}).csv", replacement = "\\2\\3\\4\\5"), pattern = "_", replacement = ""), format='%Y%m%d%H%M%S')
@@ -88,10 +88,10 @@ Fichiers$PeriodeValide <- (Fichiers$Source =='GRD' & format(as.Date(Fichiers$Per
 Fichiers <- Fichiers[which(Fichiers$PeriodeValide),]
 
 #Table de synthese des traitements a effectuer
-Synthese <- merge(y = Fichiers[which(with(data = Fichiers, Type == "CRMC" & Source == "GRD")),c('Mecanisme','Dossier','Periode','HorodateCreation')], 
-                  x = Fichiers[which(Fichiers$Type == "CDC"),c('Lien','Mecanisme','Dossier','Periode','HorodateCreation')],by = c('Mecanisme','Dossier','Periode'), all.x = TRUE, suffixes = c("CDC","")) 
+Synthese <- merge(y = Fichiers[which(with(data = Fichiers, Type == "CRMC" & Source == "GRD")),c('Mecanisme','Dossier','Periode','HorodateCreation')],
+                  x = Fichiers[which(Fichiers$Type == "CDC"),c('Lien','Mecanisme','Dossier','Periode','HorodateCreation')],by = c('Mecanisme','Dossier','Periode'), all.x = TRUE, suffixes = c("CDC",""))
 
-Synthese <- merge(y = Fichiers[which(with(data = Fichiers, Type == "CRMC" & Source == "RTE")),c('Mecanisme','Dossier','HorodateCreation')], 
+Synthese <- merge(y = Fichiers[which(with(data = Fichiers, Type == "CRMC" & Source == "RTE")),c('Mecanisme','Dossier','HorodateCreation')],
                   x = Synthese ,by.x = c('Mecanisme','Dossier'),by.y = c('Mecanisme','Dossier'), all.x = TRUE, suffixes = c("CRMC_GRD","CRMC_RTE"))
 logprint("Fichiers stock?s : ")
 logprint(Synthese)
@@ -111,90 +111,90 @@ incDir=0
 
 #3-Boucle sur les semaines----
 for(mois in Mois){
-  
+
   incDir = incDir + 1
   logprint(paste("Traitement du mois de ",unique(format(as.Date(paste(mois,'01'),"%Y%m %d"),"%B %Y ")),incDir,"/",length(Mois),"\n",sep=""))
-  
+
   #Lien complet vers le dossier du mois a traiter
-  dir <- paste(DIR_DATA,"/", mois, sep='')
-  
-  logprint(paste("TRAITEMENT DU DOSSIER",dir))
-  
+  dossier <- paste(DIR_DATA,"/", mois, sep='')
+
+  logprint(paste("TRAITEMENT DU DOSSIER",dossier))
+
   #Liste des semaines du mois a traiter
   EnCours <- ATraiter[ATraiter$Dossier == mois,]
-  
+
   #Chargement du perimetre du mois a traiter
-  Perimetre<-LoadPerimetre(dir)
+  Perimetre<-LoadPerimetre(dossier)
   Perimetre<-Perimetre[!duplicated(Perimetre[,c("CODE_ENTITE","CODE_SITE")]),]
-  
+
   #Chargement de la liste des EDE actives pour les methodes de CR associees
-  ListeEntt<-LoadListeEntt(dir)
-  
+  ListeEntt<-LoadListeEntt(dossier)
+
   #Chargement de la liste des sites homologues pour les variantes
-  SitesHomol <- LoadSitesHomol(dir)
-  
+  SitesHomol <- LoadSitesHomol(dossier)
+
   #Chargement des jours d'indisponibilites
-  IndHist <- LoadIndHist(dir)
-  
+  IndHist <- LoadIndHist(dossier)
+
   #Chargement des chroniques de previsions
-  cdcPrev <- LoadPrev(dir)
-  
+  cdcPrev <- LoadPrev(dossier)
+
   #S'il existe une entite avec la methode par historique dans le perimetre alors on charge les CdC du mois passe.
   if(any(ListeEntt$CODE_ENTITE[which(ListeEntt$METHODE_CONTROLE_REALISE == 'HISTORIQUE')] %in% Perimetre$CODE_ENTITE))
   {
     #Chargement des effacements du mois en cours de traitement et du mois precedent
-    Effacements <- mapply(SIMPLIFY = TRUE, FUN = LoadEffacements,dir = paste(DIR_DATA,"/",format(seq.Date(from = as.Date(paste(mois,"01"),"%Y%m %d"),by = "-1 month",length.out = 2),"%Y%m"),sep=''))
+    Effacements <- mapply(SIMPLIFY = TRUE, FUN = LoadEffacements,dossier = paste(DIR_DATA,"/",format(seq.Date(from = as.Date(paste(mois,"01"),"%Y%m %d"),by = "-1 month",length.out = 2),"%Y%m"),sep=''))
     #Pas d'historique du mois passes
     if(typeof(Effacements[[2]])!="character"){
-    
+
       Effacements <- rbind.data.frame(Effacements[,2], Effacements[,1],deparse.level = 2,stringsAsFactors = FALSE)
-      
+
       }else
     {
       Effacements <- Effacements[[1]]
     }
-    
+
     Effacements$debut <- as.POSIXct(Effacements$debut,origin="1970-01-01")
     Effacements$fin <- as.POSIXct(Effacements$fin,origin="1970-01-01")
 
   }else
   {
     #Chargement des effacements du mois en cours de traitement
-    Effacements <- LoadEffacements(dir)
+    Effacements <- LoadEffacements(dossier)
   }
-  
+
   #On ne garde que les effacements du perimetre du mois depose dans le dossier
   Effacements <- Effacements[which(Effacements$CODE_ENTITE %in% unique(Perimetre$CODE_ENTITE)),]
-  
+
   #Liste des semaines a traiter parmi celles du mois en cours de traitement
   Semaines <- unique(EnCours$Periode)
-  
+
   incSem = 0
   for(semaine in Semaines){
-    
+
     incSem = incSem + 1
     logprint(paste("Traitement de la semaine du ",format(as.Date(semaine,"%Y%m%d"),"%A %d %B %Y "),incSem,"/",length(Semaines),"\n",sep=""))
-    
+
     #Filtre sur les effacements de la semaine
     effacements <- Effacements[as.Date(Effacements$fin)>=as.Date(semaine,format="%Y%m%d") & as.Date(Effacements$debut)<=as.Date(semaine,format="%Y%m%d")+6,]
-    
+
     #Filtre sur les previsions de la semaine
     cdcPrevHebdo <- cdcPrev[as.Date(cdcPrev$horodate)>=as.Date(semaine,format="%Y%m%d") & as.Date(cdcPrev$horodate)<=as.Date(semaine,format="%Y%m%d")+6,]
-    
+
     if(nrow(effacements)>0){
-      historique<-Synthese[as.Date(Synthese$Periode,format="%Y%m%d")>=as.Date(semaine,format="%Y%m%d")-35 
-                           & as.Date(Synthese$Periode,format="%Y%m%d")<=as.Date(semaine,format="%Y%m%d") 
+      historique<-Synthese[as.Date(Synthese$Periode,format="%Y%m%d")>=as.Date(semaine,format="%Y%m%d")-35
+                           & as.Date(Synthese$Periode,format="%Y%m%d")<=as.Date(semaine,format="%Y%m%d")
                            & Synthese$Mecanisme %in% EnCours$Mecanisme[EnCours$Periode == semaine],c("Dossier","Lien")]##on charge a la fois les courbes de la semaine S en cours de traitement mais aussi jusqu'a S-5
-      
-      
+
+
       cdcfilenames <- as.character(historique$Lien)
       cdc <- LoadCdC(files = cdcfilenames)
-      
+
       #VERIFICATION QUE TOUS LES SITES EFFACES ONT DES COURBES
       cdc = mutate(.data = cdc, DATE = as_date(HORODATE, tz = 'CET'))
-      
+
       effacements = mutate(.data = effacements, DATE = as_date(debut, tz = 'CET'))
-      
+
       perimeff<-merge(Perimetre[Perimetre$mecanisme %in% EnCours$Mecanisme,],effacements,by="CODE_ENTITE")
       verifcdc<-merge(by=c("CODE_ENTITE","CODE_SITE","DATE"),all.y=T,cdc[!duplicated(cdc[,c("CODE_ENTITE","CODE_SITE","DATE")]),],perimeff)
       cdcmqt<-verifcdc[is.na(verifcdc$PUISSANCE),c("CODE_ENTITE","CODE_SITE")]
@@ -202,10 +202,10 @@ for(mois in Mois){
         logprint(paste("Courbes introuvables ",paste(cdcmqt,collapse=", ")," - Entite supprimee",sep=""))
         effacements<-effacements[!effacements$CODE_ENTITE %in% cdcmqt$CODE_ENTITE,]
       }
-      
+
       #CALCULS DES CHRONIQUES D'EFFACEMENTS
       cdccrmc1<-CRModeCorrige(cdc = cdc,perimetre = Perimetre,effacements = effacements,effacementshisto=Effacements,ListeEntt = ListeEntt,SitesHomol = SitesHomol,IndHist = IndHist, cdcPrev = cdcPrevHebdo)
-      
+
       if(length(cdccrmc1)<=1){
         cdccrmc<-data.frame(CODE_ENTITE=NA,CODE_SITE=NA,DATE=NA,HORODATE_UTC=NA,HORODATE30=NA)
       }else{
@@ -219,9 +219,9 @@ for(mois in Mois){
         cdccrmc<-cdccrmc[cdccrmc$CODE_SITE %in% Perimetre$CODE_SITE[Perimetre$TYPE_CONTRAT=="CARD" & Perimetre$CATEGORIE=="SUP_36"],]#Filtre sur les sites CARD
       }
     }else{
-      
+
       cdccrmc<-data.frame(CODE_ENTITE=NA,CODE_SITE=NA,DATE=NA)
-      
+
     }
     if(cdcnul==TRUE){
       cdccrmct1<-aggregate(puissance~CODE_ENTITE+CODE_SITE+DATE,cdc,length)
@@ -239,13 +239,13 @@ for(mois in Mois){
     cdccrmct1[,paste("VAL",1:48,sep="")]<-0
     cdccrmct1[,paste("VAL",49:51,sep="")]<-""
     cdccrmct1<-cdccrmct1[!is.na(cdccrmct1$CODE_ENTITE),]
-    
+
     #Exportation des chroniques d'effacements
     for(meca in EnCours$Mecanisme[EnCours$Periode==semaine]){
-      
-      filename<-paste(dir,"/",meca,"_CRMODECORRIGE_",semaine,"_",EIC,"_",format(Sys.time(),"%Y%m%d%H%M%S"),".csv",sep="")
+
+      filename<-paste(dossier,"/",meca,"_CRMODECORRIGE_",semaine,"_",EIC,"_",format(Sys.time(),"%Y%m%d%H%M%S"),".csv",sep="")
       if(meca=="NEBEF"){
-        typeent<-"CODE_EDE" 
+        typeent<-"CODE_EDE"
         cdccrmct<-cdccrmct1[substr(cdccrmct1$CODE_ENTITE,1,3)=="EDE",]
         names=c(typeent,"CODE_SITE","DATE_APP","NB_POINT")
       }else{
@@ -254,7 +254,7 @@ for(mois in Mois){
         names=c(typeent,"CODE_SITE","DATE_APP","NB_PTS_CHRONIQUE")
       }
       write.table(paste(c(names,paste("VAL",1:50,sep=""),""),collapse=";"),file=filename,col.names=F,quote=F,row.names = F)
-      
+
       if(nrow(cdccrmc)>0){
         entjrssit<-unique(cdccrmc[,c("CODE_ENTITE","CODE_SITE","DATE")])
         if(meca=="NEBEF") entjrssit<-entjrssit[substr(entjrssit$CODE_ENTITE,1,3)=="EDE",]else entjrssit<-entjrssit[substr(entjrssit$CODE_ENTITE,1,3)!="EDE",]
@@ -268,9 +268,9 @@ for(mois in Mois){
           cdccrmct$NB_POINT[wy]<-length(w)
           incentjrssit=incentjrssit +1
         }
-        
+
         write.table(x=cdccrmct,sep=";",quote=F,file=filename,append=TRUE,dec=",",col.names=F,row.names=F,na="")
-      
+
         }#/if cdccrmc
       logprint(paste("creation du fichier :",filename))
       cat(paste("creation du fichier :",filename,"\n"))
