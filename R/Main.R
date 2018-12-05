@@ -210,12 +210,12 @@ for(mois in Mois){
         cdccrmc<-data.frame(CODE_ENTITE=NA,CODE_SITE=NA,DATE=NA,HORODATE_UTC=NA,HORODATE30=NA)
       }else{
         #Agregation des volumes au pas 30
-        cdccrmc1$horodate30utc<-as.POSIXct(floor(as.numeric(as.POSIXct(format(cdccrmc1$horodate,tz="UTC"),tz="UTC"))/1800)*1800,origin="1970-01-01",tz="UTC")
-        cdccrmc<-aggregate(puissance_effacee~CODE_ENTITE+horodate30utc+CODE_SITE,cdccrmc1,mean)
-        cdccrmc$horodate30<-as.POSIXct(format(cdccrmc$horodate30utc,tz="CET"))
-        cdccrmc$DATE<-format(cdccrmc$horodate30,"%Y%m%d")
-        cdccrmc<-cdccrmc[order(cdccrmc$CODE_ENTITE,cdccrmc$CODE_SITE,cdccrmc$horodate30utc,cdccrmc$horodate30),]
-        cdccrmc$puissance_effacee<-gsub(".",",",as.character(round(cdccrmc$puissance_effacee*1000)/1000),fixed=TRUE)
+        cdccrmc1$HORODATE30utc<-as.POSIXct(floor(as.numeric(as.POSIXct(format(cdccrmc1$HORODATE,tz="UTC"),tz="UTC"))/1800)*1800,origin="1970-01-01",tz="UTC")
+        cdccrmc<-aggregate(PUISSANCE_effacee~CODE_ENTITE+HORODATE30utc+CODE_SITE,cdccrmc1,mean)
+        cdccrmc$HORODATE30<-as.POSIXct(format(cdccrmc$HORODATE30utc,tz="CET"))
+        cdccrmc$DATE<-format(cdccrmc$HORODATE30,"%Y%m%d")
+        cdccrmc<-cdccrmc[order(cdccrmc$CODE_ENTITE,cdccrmc$CODE_SITE,cdccrmc$HORODATE30utc,cdccrmc$HORODATE30),]
+        cdccrmc$PUISSANCE_effacee<-gsub(".",",",as.character(round(cdccrmc$PUISSANCE_effacee*1000)/1000),fixed=TRUE)
         cdccrmc<-cdccrmc[cdccrmc$CODE_SITE %in% Perimetre$CODE_SITE[Perimetre$TYPE_CONTRAT=="CARD" & Perimetre$CATEGORIE=="SUP_36"],]#Filtre sur les sites CARD
       }
     }else{
@@ -224,9 +224,9 @@ for(mois in Mois){
 
     }
     if(cdcnul==TRUE){
-      cdccrmct1<-aggregate(puissance~CODE_ENTITE+CODE_SITE+DATE,cdc,length)
+      cdccrmct1<-aggregate(PUISSANCE~CODE_ENTITE+CODE_SITE+DATE,cdc,length)
       cdccrmct1<-cdccrmct1[cdccrmct1$CODE_SITE %in% Perimetre$CODE_SITE[Perimetre$TYPE_CONTRAT=="CARD" & Perimetre$CATEGORIE=="SUP_36"],]
-      names(cdccrmct1)[names(cdccrmct1)=="puissance"]<-"NB_POINT"
+      names(cdccrmct1)[names(cdccrmct1)=="PUISSANCE"]<-"NB_POINT"
       cdccrmct1$NB_POINT<-round(cdccrmct1$NB_POINT/3)#passage cdc 10' à 30'
       cdccrmct1$DATE<-gsub("-","",cdccrmct1$DATE)
       logprint("Generation de toutes les courbes des sites CARD meme en l'absence d'effacement")
@@ -264,7 +264,7 @@ for(mois in Mois){
           wy<-which(cdccrmct$CODE_ENTITE==entjrssit$CODE_ENTITE[incentjrssit] & cdccrmct$CODE_SITE==entjrssit$CODE_SITE[incentjrssit] & cdccrmct$DATE==entjrssit$DATE[incentjrssit])
           w<-which(cdccrmc$DATE==entjrssit$DATE[incentjrssit] & cdccrmc$CODE_ENTITE==entjrssit$CODE_ENTITE[incentjrssit] & cdccrmc$CODE_SITE==entjrssit$CODE_SITE[incentjrssit])
           cdccrmct[wy,47:50]<-""
-          cdccrmct[wy,5:(4+length(w))]<-cdccrmc$puissance_effacee[w]
+          cdccrmct[wy,5:(4+length(w))]<-cdccrmc$PUISSANCE_effacee[w]
           cdccrmct$NB_POINT[wy]<-length(w)
           incentjrssit=incentjrssit +1
         }
