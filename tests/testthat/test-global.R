@@ -1,7 +1,7 @@
 library(tidyverse)
 library(lubridate)
 
-test_eff = LoadEffacements(dossier = paste0(getwd(),'/data-raw/201801'))
+test_eff = LoadEffacements(dossiers = paste0(getwd(),'/data-raw/201801'))
 
 test_perim = LoadPerimetre(dossier = paste0(getwd(),'/data-raw/201801'))
 

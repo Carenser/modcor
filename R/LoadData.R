@@ -224,10 +224,13 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
       dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
       dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée
       {
-        purrr::map2_dfr(
-          .x = str_c(.$dossier,.$fichier,sep='')
-          , .y = select(., mecanisme, date_validite)
-          , .f = function(x,y){
+        purrr::pmap_dfr(
+          .l = list(
+            x = str_c(.$dossier,.$fichier,sep='')
+            , y = .$mecanisme
+            , z = .$date_validite
+          )
+          , .f = function(x,y,z){
             if(stringr::str_detect(string = x, pattern = "OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers MA
 
               readr::read_delim(
@@ -252,9 +255,20 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
                   , FIN = parse_datetime(x = ACTIVATION_FIN, format = '%Y%m%d%H%M%S', locale = locale(tz = 'CET'))
                   , SIGNE = dplyr::case_when(stringr::str_to_upper(SENS_AJUSTEMENT) == 'HAUSSE' ~ +1, stringr::str_to_upper(SENS_AJUSTEMENT) == 'BAISSE' ~ -1)
                   , DMO = lubridate::dminutes(DMO) # On exprime le DMO en minutes
-                  , PUISSANCE
+                  #, PUISSANCE
                 ) %>% #On renomme la table avec des noms communs aux différents mécanismes
-                tibble::add_column(MECANISME = y$mecanisme,.before = 1)
+                tibble::add_column(MECANISME = y,.before = 1)
+
+              # %>%
+              #   # On concatène les périodes concomittantes help(normalisation d'intervalles ???)
+              #   map_dfr(
+              #     .f = function(x)
+              #     {
+              #       print(x)
+              #       #tibble(HORODATE = seq.POSIXt(from = select(x,DEBUT),to = select(x,FIN) - 300, by = 300))
+              #     }
+              #   )
+
             }
 
             if(stringr::str_detect(string = x, pattern = "PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers NEBEF
@@ -276,16 +290,16 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
                 dplyr::select(CODE_EDE,NB_PTS_CHRONIQUE,starts_with('VAL')) %>% # On supprime les colonnes inutiles
                 dplyr::rename(CODE_ENTITE = CODE_EDE) %>% #On renomme la table avec des noms communs aux différents mécanismes
                 tidyr::gather(- CODE_ENTITE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
-                dplyr::mutate(DATE = y$date_validite, MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
+                dplyr::mutate(DATE = z, MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
                 dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
                 dplyr::mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
                 dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
                 dplyr::transmute(CODE_ENTITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On convertit la puissance en kWh, on crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
-                chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC') %>% #On transpose les chroniques en programme
+                {chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC', int_step = 1800)} %>% #On transpose les chroniques en programme
                 dplyr::rename(CODE_ENTITE = group, DEBUT = begin, FIN = end, SIGNE = sign) %>%
-                tibble::add_column(MECANISME = y$mecanisme,.before = 1) %>%
+                tibble::add_column(MECANISME = y,.before = 1) %>%
                 tibble::add_column(DMO = NA) %>%
-                dplyr::mutate(DEBUT = with_tz(DEBUT,tzone = 'CET'), FIN = with_tz(FIN,tzone = 'CET'))
+                dplyr::mutate(DEBUT = lubridate::with_tz(DEBUT,tzone = 'CET'), FIN = lubridate::with_tz(FIN,tzone = 'CET'))
             }
           }
         )

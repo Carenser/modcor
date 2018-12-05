@@ -20,6 +20,10 @@
 #' chron2prog(ex_tbl.PER, int_step =  600)
 chron2prog <- function(tbl_ts, int_step = 1800, char_group = 'groupe', char_pow = 'puissance', char_datetime = 'horodate_UTC')
 {
+
+  if(nrow(tbl_ts)==0)
+    return(tibble::tibble(group = character(), begin = as_datetime(numeric()), end = as_datetime(numeric()), sign = integer()))
+
   tbl_ts %>%
     dplyr::rename(group = !!char_group, datetime = !!char_datetime, pow = !!char_pow) %>%
     dplyr::mutate(sign=sign(pow)) %>%
@@ -51,5 +55,4 @@ chron2prog <- function(tbl_ts, int_step = 1800, char_group = 'groupe', char_pow 
         dplyr::mutate(end = end + seconds(int_step)) %>%
         dplyr::arrange(group, desc(end))
     }
-  # programme d'effacement borne de fin exclue
 }
