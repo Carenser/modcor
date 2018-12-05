@@ -224,13 +224,14 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
       dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
       dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée
       {
-        purrr::pmap_dfr(
+        purrr::pmap_df(
           .l = list(
             x = str_c(.$dossier,.$fichier,sep='')
             , y = .$mecanisme
             , z = .$date_validite
           )
           , .f = function(x,y,z){
+
             if(stringr::str_detect(string = x, pattern = "OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers MA
 
               readr::read_delim(
@@ -254,7 +255,7 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
                   , DEBUT = parse_datetime(x = ACTIVATION_DEBUT, format = '%Y%m%d%H%M%S', locale = locale(tz = 'CET'))
                   , FIN = parse_datetime(x = ACTIVATION_FIN, format = '%Y%m%d%H%M%S', locale = locale(tz = 'CET'))
                   , SIGNE = dplyr::case_when(stringr::str_to_upper(SENS_AJUSTEMENT) == 'HAUSSE' ~ +1, stringr::str_to_upper(SENS_AJUSTEMENT) == 'BAISSE' ~ -1)
-                  , DMO = lubridate::dminutes(DMO) # On exprime le DMO en minutes
+                  , DMO
                   #, PUISSANCE
                 ) %>% #On renomme la table avec des noms communs aux différents mécanismes
                 tibble::add_column(MECANISME = y,.before = 1)
@@ -269,41 +270,47 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
               #     }
               #   )
 
-            }
+            }else{
 
-            if(stringr::str_detect(string = x, pattern = "PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers NEBEF
+              if(stringr::str_detect(string = x, pattern = "PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$"))
+              { # Traitement des fichiers NEBEF
 
-              readr::read_delim(
-                file = x
-                , delim = ';'
-                , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
-                , comment = '<EOF>'
-                , col_types =
-                  list(
-                    CODE_EDE = 'c'
-                    , TYPE_EDE = 'c'
-                    , NB_PTS_CHRONIQUE = 'i'
-                    , .default = 'd'
+
+                suppressWarnings( # Warning lié au format : ajout d'une colonne vide en fin de ligne
+                  readr::read_delim(
+                    file = x
+                    , delim = ';'
+                    , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
+                    , comment = '<EOF>'
+                    , col_types =
+                      list(
+                        CODE_EDE = 'c'
+                        , TYPE_EDE = 'c'
+                        , NB_PTS_CHRONIQUE = 'i'
+                        , .default = 'd'
+                      )
+                    , skip = 2
                   )
-                , skip = 2
-              ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
-                dplyr::select(CODE_EDE,NB_PTS_CHRONIQUE,starts_with('VAL')) %>% # On supprime les colonnes inutiles
-                dplyr::rename(CODE_ENTITE = CODE_EDE) %>% #On renomme la table avec des noms communs aux différents mécanismes
-                tidyr::gather(- CODE_ENTITE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
-                dplyr::mutate(DATE = z, MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
-                dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
-                dplyr::mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
-                dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
-                dplyr::transmute(CODE_ENTITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On convertit la puissance en kWh, on crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
-                {chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC', int_step = 1800)} %>% #On transpose les chroniques en programme
-                dplyr::rename(CODE_ENTITE = group, DEBUT = begin, FIN = end, SIGNE = sign) %>%
-                tibble::add_column(MECANISME = y,.before = 1) %>%
-                tibble::add_column(DMO = NA) %>%
-                dplyr::mutate(DEBUT = lubridate::with_tz(DEBUT,tzone = 'CET'), FIN = lubridate::with_tz(FIN,tzone = 'CET'))
+                ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                  dplyr::select(CODE_EDE,NB_PTS_CHRONIQUE,starts_with('VAL')) %>% # On supprime les colonnes inutiles
+                  dplyr::rename(CODE_ENTITE = CODE_EDE) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                  tidyr::gather(- CODE_ENTITE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
+                  dplyr::mutate(DATE = as_date(z), MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
+                  dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
+                  dplyr::mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
+                  dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                  dplyr::transmute(CODE_ENTITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On convertit la puissance en kWh, on crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                  {chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC', int_step = 1800)} %>% #On transpose les chroniques en programme
+                  dplyr::rename(CODE_ENTITE = group, DEBUT = begin, FIN = end, SIGNE = sign) %>%
+                  tibble::add_column(MECANISME = y,.before = 1) %>%
+                  tibble::add_column(DMO = NA) %>%
+                  dplyr::mutate(DEBUT = lubridate::with_tz(DEBUT,tzone = 'CET'), FIN = lubridate::with_tz(FIN,tzone = 'CET'))
+              }
             }
           }
         )
-      }
+      } %>%
+      mutate(DMO = lubridate::dminutes(DMO)) # DMO est exprimé en minutes
   }
 }
 
