@@ -45,14 +45,14 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
             cdcref<-CR_RectangleDouble(cdc=cdcagr30e,eff=eff)
             cdcagr30e$PUISSANCE_effacee <- cdcref$PUISSANCE - cdcagr30e$PUISSANCE
             cdcagr30e$SIGNE = cdcref$SIGNE
-            
+
             cdcagr30e$PUISSANCE_effacee[cdcagr30e$PUISSANCE_effacee < 0 & cdcagr30e$SIGNE > 0] <- 0
             cdcagr30e$PUISSANCE_effacee[cdcagr30e$PUISSANCE_effacee > 0 & cdcagr30e$SIGNE < 0] <- 0
           }
 
         }
 
-        IndHistEff<-unique(substr(effacementshisto$debut[effacementshisto$CODE_ENTITE==entite],1,10))#on invalide la journee de debut d'effacement
+        IndHistEff<-unique(substr(effacementshisto$DEBUT[effacementshisto$CODE_ENTITE==entite],1,10))#on invalide la journee de debut d'effacement
 
         cdcent<-cdc[cdc$CODE_ENTITE==entite,]
         cdcsites1<-list()
@@ -104,10 +104,10 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
             cdcsit$PUISSANCE_effacee<-cdcref$PUISSANCE-cdcsit$PUISSANCE
 
             cdcsit$SIGNE = cdcref$SIGNE
-                        
+
             cdcsit$PUISSANCE_effacee[cdcsit$PUISSANCE_effacee < 0 & cdcsit$SIGNE > 0] <- 0
             cdcsit$PUISSANCE_effacee[cdcsit$PUISSANCE_effacee > 0 & cdcsit$SIGNE < 0] <- 0
-            
+
             cdcsites1[[j]]<-cdcsit
 
           }#/if cdc
@@ -115,7 +115,7 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
         cdcsites<- do.call("rbind",cdcsites1)
 
         #2c Filtrage sur les journees avec effacement pour la semaine consideree (les effacements de l'historique n'interviennent pas ici)
-        cdcsites <- cdcsites[substr(cdcsites$HORODATE,1,10) %in% substr(c(eff$debut,eff$fin-1),1,10),]
+        cdcsites <- cdcsites[substr(cdcsites$HORODATE,1,10) %in% substr(c(eff$DEBUT,eff$FIN-1),1,10),]
 
         #2d1 Agregation des effacements-sites a la maille entite
 

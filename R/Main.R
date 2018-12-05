@@ -22,10 +22,10 @@ args <- commandArgs(trailingOnly = TRUE)
 DIR_DATA <- gsub(x = args[1], pattern = "\\\\", replacement = "/")
 DIR_SCRIPT <- gsub(x = args[2], pattern = "\\\\", replacement = "/")
 
-# DIR_DATA <- paste0(getwd(),"/data-raw")
-# DIR_SCRIPT <- paste0(getwd(),"/R")
+DIR_DATA <- paste0(getwd(),"/data-raw")
+DIR_SCRIPT <- paste0(getwd(),"/R")
 
-if(!dossier.exists(paste(DIR_SCRIPT,"/log",sep="")))dossier.create(paste(DIR_SCRIPT,"/log",sep=""))
+if(!dir.exists(paste(DIR_SCRIPT,"/log",sep="")))dossier.create(paste(DIR_SCRIPT,"/log",sep=""))
 logfilename<-paste(DIR_SCRIPT,"/log/log",format(Sys.time(),"_%Y%m%d_%H%M%S.txt"),sep="")
 logprint<-function(string){
   cat(string)
@@ -154,13 +154,13 @@ for(mois in Mois){
       Effacements <- Effacements[[1]]
     }
 
-    Effacements$debut <- as.POSIXct(Effacements$debut,origin="1970-01-01")
-    Effacements$fin <- as.POSIXct(Effacements$fin,origin="1970-01-01")
+    Effacements$DEBUT <- as.POSIXct(Effacements$DEBUT,origin="1970-01-01")
+    Effacements$FIN <- as.POSIXct(Effacements$FIN,origin="1970-01-01")
 
   }else
   {
     #Chargement des effacements du mois en cours de traitement
-    Effacements <- LoadEffacements(dossier)
+    Effacements <- LoadEffacements(dossiers = dossier)
   }
 
   #On ne garde que les effacements du perimetre du mois depose dans le dossier
@@ -176,7 +176,7 @@ for(mois in Mois){
     logprint(paste("Traitement de la semaine du ",format(as.Date(semaine,"%Y%m%d"),"%A %d %B %Y "),incSem,"/",length(Semaines),"\n",sep=""))
 
     #Filtre sur les effacements de la semaine
-    effacements <- Effacements[as.Date(Effacements$fin)>=as.Date(semaine,format="%Y%m%d") & as.Date(Effacements$debut)<=as.Date(semaine,format="%Y%m%d")+6,]
+    effacements <- Effacements[as.Date(Effacements$FIN)>=as.Date(semaine,format="%Y%m%d") & as.Date(Effacements$DEBUT)<=as.Date(semaine,format="%Y%m%d")+6,]
 
     #Filtre sur les previsions de la semaine
     cdcPrevHebdo <- cdcPrev[as.Date(cdcPrev$horodate)>=as.Date(semaine,format="%Y%m%d") & as.Date(cdcPrev$horodate)<=as.Date(semaine,format="%Y%m%d")+6,]
@@ -188,12 +188,12 @@ for(mois in Mois){
 
 
       cdcfilenames <- as.character(historique$Lien)
-      cdc <- LoadCdC(files = cdcfilenames)
+      cdc <- LoadCdC(fichiers = cdcfilenames)
 
       #VERIFICATION QUE TOUS LES SITES EFFACES ONT DES COURBES
       cdc = mutate(.data = cdc, DATE = as_date(HORODATE, tz = 'CET'))
 
-      effacements = mutate(.data = effacements, DATE = as_date(debut, tz = 'CET'))
+      effacements = mutate(.data = effacements, DATE = as_date(DEBUT, tz = 'CET'))
 
       perimeff<-merge(Perimetre[Perimetre$mecanisme %in% EnCours$Mecanisme,],effacements,by="CODE_ENTITE")
       verifcdc<-merge(by=c("CODE_ENTITE","CODE_SITE","DATE"),all.y=T,cdc[!duplicated(cdc[,c("CODE_ENTITE","CODE_SITE","DATE")]),],perimeff)

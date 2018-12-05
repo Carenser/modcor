@@ -485,7 +485,7 @@ LoadPEIF<-function(dossier=""){}
 #' @examples
 LoadPrev<-function(dossier, pas = 600){
 
-  if(dossier.exists(dossier))
+  if(dir.exists(dossier))
   {
     #Fichiers de programme d'Effacement Retenus
     lfprev <- list.files(path = dossier, pattern = "_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_[0-9]{14}.csv", full.names = TRUE)
