@@ -169,86 +169,101 @@ LoadEffacements<-function(dossier){
 #' @param dossier le nom du répertoire contenant les fichiers passés en paramètre (facultatif)
 #' @param fichiers un vecteur contenant les noms des fichiers de courbes de charges
 #'
-#' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, PUISSANCE
+#' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, PUISSANCE
 #' @export
 #' @import tidyverse
 #' @import lubridate
 #' @examples
-LoadCdC<-function(fichiers, dossier = NULL){
+LoadCdC<-function(fichiers, dossiers = NULL){
 
-  if(!is.null(dossier)) fichiers <- paste(dossier, fichiers, sep = "/") #Si le dossier n'est pas spécifié alors les chemins des fichiers sont absolus
+  if(is.null(dossiers))
+  {
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
 
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
-  if(all(regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv", fichiers) < 0))
+  if(!any(stringr::str_detect(string = fichiers,pattern = "^CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv$|^NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv$")))
   {
-    stop('aucun fichier conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
+    stop('aucun fichier de CdC conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
 
   }else{
 
-    if(any(regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv", fichiers) < 0))
-    {
-      filter(fichiers, regexpr(pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv", fichiers) < 0)
-    }
+    stringr::str_match(string =  fichiers, pattern = "^CRMA_[0-9]{4}_([0-9]{8}_[0-9]{6})_([0-9]{8}).csv$|^NEBEF_CRS_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
+      dplyr::as_tibble() %>%
+      dplyr::transmute(
+        dossier = dossiers
+        , fichier = V1
+        , mecanisme = case_when(str_detect(string = V1,pattern = 'CRMA') ~ 'MA',str_detect(string = V1,pattern = 'NEBEF') ~ 'NEBEF', TRUE ~ NA_character_)
+        , horodate_creation = coalesce(ymd_hms(V2,tz = 'CET'),ymd_hms(V5,tz = 'CET'))
+        , date_validite = coalesce(as_date(V3),as_date(V4))
+      ) %>%
+      dplyr::filter(str_detect(string = fichier, pattern = "^CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv$|NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv$")) %>% # On ne conserve que les fichiers de CdC
+      dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
+      dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée
+      {
+        purrr::map2_dfr(
+          .x = str_c(.$dossier,.$fichier,sep='')
+          , .y = .$mecanisme
+          , .f = function(x,y){
+            if(stringr::str_detect(string = x, pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv")){ # Traitement des fichiers MA
 
-    map_dfr(
-      .x = fichiers
-      , .f = function(fichier){
-        if(regexpr("CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv",fichier)>0){ # Traitement des fichiers MA
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
+                , comment = '<EOF>'
+                , col_types =
+                  list(
+                    CODE_EDA = 'c'
+                    , CODE_SITE = 'c'
+                    , DATE_CRB = 'D'
+                    , NB_PTS_CHRONIQUE = 'i'
+                    , .default = 'd'
+                  )
+                , skip = 0
+              ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                dplyr::rename(CODE_ENTITE = CODE_EDA, DATE = DATE_CRB) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                tidyr::gather(- CODE_ENTITE, - CODE_SITE, - DATE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
+                dplyr::mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique en retranchant 1
+                dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
+                dplyr::mutate(MINUTE = (60 * 24 * MINUTE)/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
+                dplyr::mutate(HORODATE = force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                dplyr::transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                tibble::add_column(MECANISME = y,.before = 1)
+            }
 
-          read_delim(
-            file = fichier
-            , delim = ';'
-            , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
-            , comment = '<EOF>'
-            , col_types =
-              list(
-                CODE_EDA = 'c'
-                , CODE_SITE = 'c'
-                , DATE_CRB = 'D'
-                , NB_PTS_CHRONIQUE = 'i'
-                , .default = 'd'
-              )
-            , skip = 0
-          ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
-            rename(CODE_ENTITE = CODE_EDA, DATE = DATE_CRB) %>% #On renomme la table avec des noms communs aux différents mécanismes
-            gather(- CODE_ENTITE, - CODE_SITE, - DATE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
-            mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique en retranchant 1
-            filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
-            mutate(MINUTE = (60 * 24 * MINUTE)/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
-            mutate(HORODATE = force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
-            transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+            if(stringr::str_detect(string = x, pattern = "NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv")){ # Traitement des fichiers NEBEF
 
-        }
-
-        if(regexpr("NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv",fichier)>0){ # Traitement des fichiers NEBEF
-
-          read_delim(
-            file = fichier
-            , delim = ';'
-            , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
-            , comment = '<EOF>'
-            , col_types =
-              list(
-                CODE_EDE = 'c'
-                , CODE_EXT_SITE = 'c'
-                , CODE_EIC_GRD = 'c'
-                , DATE = 'D'
-                , NB_PTS_CHRONIQUE = 'i'
-                , .default = 'd'
-              )
-            , skip = 2
-          ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
-            select(- CODE_EIC_GRD) %>% # On supprime les colonnes inutiles
-            rename(CODE_ENTITE = CODE_EDE, CODE_SITE = CODE_EXT_SITE) %>% #On renomme la table avec des noms communs aux différents mécanismes
-            gather(- CODE_ENTITE, - CODE_SITE, - DATE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
-            mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
-            filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
-            mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
-            mutate(HORODATE = force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
-            transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
-        }
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
+                , comment = '<EOF>'
+                , col_types =
+                  list(
+                    CODE_EDE = 'c'
+                    , CODE_EXT_SITE = 'c'
+                    , CODE_EIC_GRD = 'c'
+                    , DATE = 'D'
+                    , NB_PTS_CHRONIQUE = 'i'
+                    , .default = 'd'
+                  )
+                , skip = 2
+              ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                dplyr::select(- CODE_EIC_GRD) %>% # On supprime les colonnes inutiles
+                dplyr::rename(CODE_ENTITE = CODE_EDE, CODE_SITE = CODE_EXT_SITE) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                tidyr::gather(- CODE_ENTITE, - CODE_SITE, - DATE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
+                dplyr::mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
+                dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
+                dplyr::mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
+                dplyr::mutate(HORODATE = force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                dplyr::transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                tibble::add_column(MECANISME = y,.before = 1)
+            }
+          }
+        )
       }
-    )
   }
 }
 
@@ -326,97 +341,97 @@ LoadPrev<-function(dossier, pas = 600){
     lfprev <- list.files(path = dossier, pattern = "_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_[0-9]{14}.csv", full.names = TRUE)
     lfprev <- file.info(lfprev,extra_cols = TRUE)
     lfprev$Lien = rownames(lfprev)
-rownames(lfprev) <- NULL
+    rownames(lfprev) <- NULL
 
-#Horodate de création figurant dans le nom du fichier
-lfprev$HorodateCreation = as.POSIXct(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
+    #Horodate de création figurant dans le nom du fichier
+    lfprev$HorodateCreation = as.POSIXct(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
 
-#Journee d'effacement correspondante
-lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
+    #Journee d'effacement correspondante
+    lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
 
-#M?canisme
-lfprev$Mec = substr(gsub(dossier,"",lfprev$Lien),2,4)
+    #M?canisme
+    lfprev$Mec = substr(gsub(dossier,"",lfprev$Lien),2,4)
 
-#Tri des fichiers par Jour et horodate de création
-lfprev <- lfprev[order(lfprev$JourPrevision,lfprev$HorodateCreation, decreasing = TRUE),]
+    #Tri des fichiers par Jour et horodate de création
+    lfprev <- lfprev[order(lfprev$JourPrevision,lfprev$HorodateCreation, decreasing = TRUE),]
 
-#Dédoublonnage des fichiers de CdC en selectionnant les plus récents par Jour d'effacement
-lfprev <- lfprev[!duplicated(lfprev[,c('JourPrevision','Mec')]),]
+    #Dédoublonnage des fichiers de CdC en selectionnant les plus récents par Jour d'effacement
+    lfprev <- lfprev[!duplicated(lfprev[,c('JourPrevision','Mec')]),]
 
-#Fichiers non vides (superieur a 390 octets)
-lfprev <- lfprev[which(lfprev$size > 390),]
+    #Fichiers non vides (superieur a 390 octets)
+    lfprev <- lfprev[which(lfprev$size > 390),]
 
-prevData <- data.frame(CODE_ENTITE = NA, CODE_SITE = NA, horodate = NA, horodateutc = NA, puissance = NA)[0,]
+    prevData <- data.frame(CODE_ENTITE = NA, CODE_SITE = NA, horodate = NA, horodateutc = NA, puissance = NA)[0,]
 
-if( nrow(lfprev) > 0 ){
+    if( nrow(lfprev) > 0 ){
 
-  for(i in 1:nrow(lfprev)){
+      for(i in 1:nrow(lfprev)){
 
-    prevFile <- lfprev[i,]
+        prevFile <- lfprev[i,]
 
-    prevDataTemp <- suppressWarnings(read.table(file = prevFile$Lien, skip = 2, fill = TRUE, comment.char = "<", header = TRUE, sep = ';',dec = ',', stringsAsFactors = FALSE))
+        prevDataTemp <- suppressWarnings(read.table(file = prevFile$Lien, skip = 2, fill = TRUE, comment.char = "<", header = TRUE, sep = ';',dec = ',', stringsAsFactors = FALSE))
 
-    for(j in 1:nrow(prevDataTemp))
-    {
-      #Jour de prévision
-      jour <- as.Date.character(x = prevDataTemp$DATE[j], format = "%Y%m%d")
+        for(j in 1:nrow(prevDataTemp))
+        {
+          #Jour de prévision
+          jour <- as.Date.character(x = prevDataTemp$DATE[j], format = "%Y%m%d")
 
-      #Début de la chronique
-      deb <- as.POSIXct(x = paste(jour, '00:00:00'))
+          #Début de la chronique
+          deb <- as.POSIXct(x = paste(jour, '00:00:00'))
 
-      #Entité correspondante
-      EDE <- as.character(prevDataTemp$CODE_EDE[j])
+          #Entité correspondante
+          EDE <- as.character(prevDataTemp$CODE_EDE[j])
 
-      Site <- as.character(prevDataTemp$CODE_EXT_SITE[j])
+          Site <- as.character(prevDataTemp$CODE_EXT_SITE[j])
 
-      #Nombre de points de CdC pour ce "jour"
-      NbPts <- prevDataTemp$NB_PTS_CHRONIQUE[j]
+          #Nombre de points de CdC pour ce "jour"
+          NbPts <- prevDataTemp$NB_PTS_CHRONIQUE[j]
 
-      #Définition du pas de temps
-      pdt <-  switch(EXPR = as.character(NbPts)
-                     , '48' = 1800
-                     , '50' = 1800
-                     , '36' = 1800
-                     , '136' = 600
-                     , '144' = 600
-                     , '150' = 600)
+          #Définition du pas de temps
+          pdt <-  switch(EXPR = as.character(NbPts)
+                         , '48' = 1800
+                         , '50' = 1800
+                         , '36' = 1800
+                         , '136' = 600
+                         , '144' = 600
+                         , '150' = 600)
 
-      #Fin de la chronique
-      fin <- as.POSIXct(x = paste(jour + 1, '00:00:00')) - pdt
+          #Fin de la chronique
+          fin <- as.POSIXct(x = paste(jour + 1, '00:00:00')) - pdt
 
-      #création de la chronique
-      chron <- seq.POSIXt(from = deb, by = pdt, to = fin)
+          #création de la chronique
+          chron <- seq.POSIXt(from = deb, by = pdt, to = fin)
 
-      chronUTC <- chron
-      attr(chronUTC, "tzone") <- "UTC"
+          chronUTC <- chron
+          attr(chronUTC, "tzone") <- "UTC"
 
-      #Valeurs de puissance exprimée en kW (Attention aux chiffres significatifs)
-      puissance <- as.numeric(unlist(prevDataTemp[j,paste('VAL',1:NbPts,sep='')], use.names = FALSE))
+          #Valeurs de puissance exprimée en kW (Attention aux chiffres significatifs)
+          puissance <- as.numeric(unlist(prevDataTemp[j,paste('VAL',1:NbPts,sep='')], use.names = FALSE))
 
-      tempdata = cbind.data.frame(CODE_ENTITE = EDE, CODE_SITE = Site, horodate = chron, horodateutc = chronUTC, puissance = puissance, stringsAsFactors = FALSE)
+          tempdata = cbind.data.frame(CODE_ENTITE = EDE, CODE_SITE = Site, horodate = chron, horodateutc = chronUTC, puissance = puissance, stringsAsFactors = FALSE)
 
 
-      if(pdt > pas)
-      {
-        tempdata = as.data.frame(apply(tempdata, MARGIN = 2, FUN = function(x){rep(x, each = pdt/pas)}))
-        tempdata$horodate = seq.POSIXt(from = deb, by = pas, to = as.POSIXct(x = paste(jour + 1, '00:00:00')) - pas)
-        tempdata$horodateutc = tempdata$horodate
-        attr(tempdata$horodateutc, "tzone") <- "UTC"
+          if(pdt > pas)
+          {
+            tempdata = as.data.frame(apply(tempdata, MARGIN = 2, FUN = function(x){rep(x, each = pdt/pas)}))
+            tempdata$horodate = seq.POSIXt(from = deb, by = pas, to = as.POSIXct(x = paste(jour + 1, '00:00:00')) - pas)
+            tempdata$horodateutc = tempdata$horodate
+            attr(tempdata$horodateutc, "tzone") <- "UTC"
+          }
+
+          #Compilation des effacements
+          prevData <- rbind.data.frame(prevData, tempdata)
+
+        }
+
       }
+      prevData$puissance<-as.numeric(prevData$puissance)
+    }else{
 
-      #Compilation des effacements
-      prevData <- rbind.data.frame(prevData, tempdata)
-
+      logprint(paste("Pas de fichier prev dans",dossier))
     }
 
-  }
-  prevData$puissance<-as.numeric(prevData$puissance)
-}else{
-
-  logprint(paste("Pas de fichier prev dans",dossier))
-}
-
-return(prevData)
+    return(prevData)
 
   }else{
 
