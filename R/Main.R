@@ -2,7 +2,7 @@
 #A PARAMETRER :
 #Mettre ? TRUE si vous souhaitez que toutes les courbes de charge CARD soient calcul?es (m?me ? nul, lorsqu'il n'y a pas d'effacement)
 #Mettre ? FALSE si vous souhaitez que seules les lignes ID*DATE concernees par un effacement ne soient calcul?es
-cdcnul<-TRUE
+cdcnul<-FALSE
 
 ## Outils de calcul des chroniques d'effacement des sites soumis au modele corrige
 
@@ -25,7 +25,7 @@ DIR_SCRIPT <- gsub(x = args[2], pattern = "\\\\", replacement = "/")
 DIR_DATA <- paste0(getwd(),"/data-raw")
 DIR_SCRIPT <- paste0(getwd(),"/R")
 
-if(!dir.exists(paste(DIR_SCRIPT,"/log",sep="")))dossier.create(paste(DIR_SCRIPT,"/log",sep=""))
+if(!dir.exists(paste(DIR_SCRIPT,"/log",sep="")))dir.create(paste(DIR_SCRIPT,"/log",sep=""))
 logfilename<-paste(DIR_SCRIPT,"/log/log",format(Sys.time(),"_%Y%m%d_%H%M%S.txt"),sep="")
 logprint<-function(string){
   cat(string)
