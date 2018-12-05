@@ -164,6 +164,135 @@ LoadEffacements<-function(dossier){
   return(effacements)
 }
 
+#' Chargement des fichiers de programme d'effacements retenus et d'ordres d'activations consolidés en J+3 aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
+#'
+#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#'
+#' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, debut, fin, DMO, SIGNE
+#' @export
+#' @import reshape2
+#' @import tidyverse
+#' @examples
+
+LoadEffacements <- function(fichiers = NULL, dossiers)
+{
+
+  # dmo<-oa2[!duplicated(oa2[,c("CODE_EDA","HORODATE")]),c("CODE_EDA","HORODATE","DMO")]#on conserve le DMO du premier ordre
+  # oa3<-aggregate(PUISSANCE~CODE_EDA+HORODATE,oa2,sum)
+  # oa4<-merge(oa3,dmo,by=c("CODE_EDA","HORODATE"))
+  # names(oa4)[names(oa4)=="CODE_EDA"]<-"CODE_ENTITE"
+  # oa4<-oa4[order(oa4$CODE_ENTITE,oa4$HORODATE,oa4$PUISSANCE),]
+  # avant<-rbind(c(NA,NA),oa4[-nrow(oa4),c("CODE_ENTITE","PUISSANCE")])
+  # apres<-rbind(oa4[-1,c("CODE_ENTITE","PUISSANCE")],c(NA,NA))
+  # oa5<-cbind(oa4[,c("HORODATE","CODE_ENTITE","PUISSANCE","DMO")],avant,apres)
+  # names(oa5)[5:8]<-c("CODE_ENTITE_avant","PUISSANCE_avant","CODE_ENTITE_apres","PUISSANCE_apres")
+  # debut<-oa5[oa5$PUISSANCE>0 & (oa5$PUISSANCE_avant==0 | oa5$CODE_ENTITE!=oa5$CODE_ENTITE_avant | 1:nrow(oa5)==1),]
+  # fin<-oa5[oa5$PUISSANCE>0 & (oa5$PUISSANCE_apres==0 | oa5$CODE_ENTITE!=oa5$CODE_ENTITE_apres | 1:nrow(oa5)==nrow(oa5)),]
+  # oa<-data.frame(CODE_ENTITE=debut$CODE_ENTITE,debut=debut$HORODATE,fin=fin$HORODATE+60,DMO=debut$DMO,SIGNE=sign(debut$PUISSANCE))
+
+  if(is.null(fichiers))
+  {
+    fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")
+
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
+
+  if(is.null(dossiers))
+  {
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
+
+  #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
+  if(!any(stringr::str_detect(string = fichiers,pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")))
+  {
+    stop("aucun fichier d'activation conforme à la nomenclature prévue dans les règles SI MA ou NEBEF")
+
+  }else{
+
+    stringr::str_match(string =  fichiers, pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
+      dplyr::as_tibble() %>%
+      dplyr::transmute(
+        dossier = dossiers
+        , fichier = V1
+        , mecanisme = dplyr::case_when(str_detect(string = V1,pattern = 'OA') ~ 'MA',str_detect(string = V1,pattern = 'PEC') ~ 'NEBEF', TRUE ~ NA_character_)
+        , horodate_creation = coalesce(ymd_hms(V3,tz = 'CET'),ymd_hms(V5,tz = 'CET'))
+        , date_validite = coalesce(as_date(V2),as_date(V4))
+      ) %>%
+      dplyr::filter(str_detect(string = fichier, pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")) %>% # On ne conserve que les fichiers de CdC
+      dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
+      dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée
+      {
+        purrr::map2_dfr(
+          .x = str_c(.$dossier,.$fichier,sep='')
+          , .y = select(., mecanisme, date_validite)
+          , .f = function(x,y){
+            if(stringr::str_detect(string = x, pattern = "OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers MA
+
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(decimal_mark = ',')
+                , comment = '<EOF>'
+                , col_types =
+                  list(
+                    ACTIVATION_DEBUT = 'c'
+                    , ACTIVATION_FIN = 'c'
+                    , PUISSANCE = 'd'
+                    , PART_AJUSTEMENT = 'd'
+                    , DMO = 'i'
+                    , .default = 'c'
+                  )
+                , skip = 2
+              ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                dplyr::transmute(
+                  CODE_ENTITE = CODE_EDA
+                  , DEBUT = parse_datetime(x = ACTIVATION_DEBUT, format = '%Y%m%d%H%M%S', locale = locale(tz = 'CET'))
+                  , FIN = parse_datetime(x = ACTIVATION_FIN, format = '%Y%m%d%H%M%S', locale = locale(tz = 'CET'))
+                  , SIGNE = dplyr::case_when(stringr::str_to_upper(SENS_AJUSTEMENT) == 'HAUSSE' ~ +1, stringr::str_to_upper(SENS_AJUSTEMENT) == 'BAISSE' ~ -1)
+                  , DMO = lubridate::dminutes(DMO) # On exprime le DMO en minutes
+                  , PUISSANCE
+                ) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                tibble::add_column(MECANISME = y$mecanisme,.before = 1)
+            }
+
+            if(stringr::str_detect(string = x, pattern = "PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers NEBEF
+
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
+                , comment = '<EOF>'
+                , col_types =
+                  list(
+                    CODE_EDE = 'c'
+                    , TYPE_EDE = 'c'
+                    , NB_PTS_CHRONIQUE = 'i'
+                    , .default = 'd'
+                  )
+                , skip = 2
+              ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                dplyr::select(CODE_EDE,NB_PTS_CHRONIQUE,starts_with('VAL')) %>% # On supprime les colonnes inutiles
+                dplyr::rename(CODE_ENTITE = CODE_EDE) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                tidyr::gather(- CODE_ENTITE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
+                dplyr::mutate(DATE = y$date_validite, MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique
+                dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
+                dplyr::mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
+                dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                dplyr::transmute(CODE_ENTITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On convertit la puissance en kWh, on crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC') %>% #On transpose les chroniques en programme
+                dplyr::rename(CODE_ENTITE = group, DEBUT = begin, FIN = end, SIGNE = sign) %>%
+                tibble::add_column(MECANISME = y$mecanisme,.before = 1) %>%
+                tibble::add_column(DMO = NA) %>%
+                dplyr::mutate(DEBUT = with_tz(DEBUT,tzone = 'CET'), FIN = with_tz(FIN,tzone = 'CET'))
+            }
+          }
+        )
+      }
+  }
+}
+
 #' Chargement des fichiers de courbes de charges aux formats prévues dans les règles SI décrivant les flux en provenance des GRD à destination de RTE
 #'
 #' @param dossier le nom du répertoire contenant les fichiers passés en paramètre (facultatif)
@@ -194,7 +323,7 @@ LoadCdC<-function(fichiers, dossiers = NULL){
       dplyr::transmute(
         dossier = dossiers
         , fichier = V1
-        , mecanisme = case_when(str_detect(string = V1,pattern = 'CRMA') ~ 'MA',str_detect(string = V1,pattern = 'NEBEF') ~ 'NEBEF', TRUE ~ NA_character_)
+        , mecanisme = dplyr::case_when(str_detect(string = V1,pattern = 'CRMA') ~ 'MA',str_detect(string = V1,pattern = 'NEBEF') ~ 'NEBEF', TRUE ~ NA_character_)
         , horodate_creation = coalesce(ymd_hms(V2,tz = 'CET'),ymd_hms(V5,tz = 'CET'))
         , date_validite = coalesce(as_date(V3),as_date(V4))
       ) %>%
@@ -228,8 +357,8 @@ LoadCdC<-function(fichiers, dossiers = NULL){
                 dplyr::mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique en retranchant 1
                 dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
                 dplyr::mutate(MINUTE = (60 * 24 * MINUTE)/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
-                dplyr::mutate(HORODATE = force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
-                dplyr::transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                dplyr::transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
                 tibble::add_column(MECANISME = y,.before = 1)
             }
 

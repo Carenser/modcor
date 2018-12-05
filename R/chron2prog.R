@@ -20,38 +20,36 @@
 #' chron2prog(ex_tbl.PER, int_step =  600)
 chron2prog <- function(tbl_ts, int_step = 1800, char_group = 'groupe', char_pow = 'puissance', char_datetime = 'horodate_UTC')
 {
-
-  tbl_res = tbl_ts %>%
-    rename(group = !!char_group, datetime = !!char_datetime, pow = !!char_pow) %>%
-    mutate(sign=sign(pow)) %>%
+  tbl_ts %>%
+    dplyr::rename(group = !!char_group, datetime = !!char_datetime, pow = !!char_pow) %>%
+    dplyr::mutate(sign=sign(pow)) %>%
     split(select(., group, sign)) %>%
-    map(function(tbl_ts)
-    {
-      tbl_ts %>%
-        filter(pow != 0) %>%
-        arrange(datetime) %>%
-        mutate(
-          begin = difftime(datetime, lag(datetime),'UTC','secs')
-          , end = rev(difftime(lag(rev(datetime)), rev(datetime),'UTC','secs'))
-        ) %>%
-        replace_na(replace = list(begin = int_step + 1, end = int_step + 1)) %>%
-        mutate(
-          begin = begin > int_step
-          , end = end > int_step
-        )
-    }
+    purrr::map_dfr(
+      .f = function(x)
+      {
+        dplyr::filter(x, pow != 0) %>%
+          dplyr::arrange(datetime) %>%
+          dplyr::mutate(
+            begin = difftime(datetime, dplyr::lag(datetime),'UTC','secs')
+            , end = rev(difftime(dplyr::lag(rev(datetime)), rev(datetime),'UTC','secs'))
+          ) %>%
+          tidyr::replace_na(replace = list(begin = int_step + 1, end = int_step + 1)) %>%
+          dplyr::mutate(
+            begin = begin > int_step
+            , end = end > int_step
+          )
+      }
     ) %>%
-    map_df(rbind)
-
-  #bourrin
-  tbl_res = bind_cols(subset(tbl_res, end, 'group')
-                      , subset(tbl_res, begin, 'datetime')
-                      , subset(tbl_res, end, 'datetime')
-                      , subset(tbl_res, end, 'sign')) %>%
-    rename(begin = datetime, end = datetime1) %>%
-    mutate(end = end + seconds(int_step)) %>%
-    arrange(group, desc(end))
-
-  return(tbl_res)
+    {
+      dplyr::bind_cols(
+        subset(., end, 'group')
+        , subset(., begin, 'datetime')
+        , subset(., end, 'datetime')
+        , subset(., end, 'sign')
+      ) %>%
+        dplyr::rename(begin = datetime, end = datetime1) %>%
+        dplyr::mutate(end = end + seconds(int_step)) %>%
+        dplyr::arrange(group, desc(end))
+    }
   # programme d'effacement borne de fin exclue
 }
