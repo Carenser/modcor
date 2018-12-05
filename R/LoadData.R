@@ -32,7 +32,7 @@ LoadPerimetre<-function(dossier){
 #'
 #' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
 #'
-#' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, debut, fin, DMO, SIGNE
+#' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, DEBUT, FIN, SIGNE, DMO
 #' @export
 #' @import reshape2
 #' @import tidyverse
@@ -88,7 +88,7 @@ LoadEffacements <- function(fichiers = NULL, dossiers)
       dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
       dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée
       {
-        purrr::pmap_df(
+        purrr::pmap_dfr(
           .l = list(
             x = str_c(.$dossier,.$fichier,sep='')
             , y = .$mecanisme
