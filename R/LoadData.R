@@ -131,7 +131,7 @@ LoadPerimetre<-function(fichiers = NULL, dossiers){
 #' @import reshape2
 #' @import tidyverse
 #' @examples
-LoadEffacements <- function(fichiers = NULL, dossiers)
+LoadEffacements <- function(dossiers, fichiers = NULL)
 {
 
   # dmo<-oa2[!duplicated(oa2[,c("CODE_EDA","HORODATE")]),c("CODE_EDA","HORODATE","DMO")]#on conserve le DMO du premier ordre
@@ -391,7 +391,7 @@ LoadCdC<-function(fichiers, dossiers = NULL){
 #' @import tidyverse
 #' @import lubridate
 #' @examples
-LoadListeEntt<-function(fichiers = NULL, dossiers){
+LoadListeEntt<-function(dossiers, fichiers = NULL){
   # for(type in c("A","E")){
   #   lfle<-list.files(dossier,pattern=paste0("LISTE_ED",type,"_GRD_"))
   #   lfle<-lfle[regexpr(".csv",lfle)>0]

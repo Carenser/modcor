@@ -140,7 +140,7 @@ for(mois in Mois){
   cdcPrev <- LoadPrev(dossier)
 
   #S'il existe une entite avec la methode par historique dans le perimetre alors on charge les CdC du mois passe.
-  if(any(ListeEntt$CODE_ENTITE[which(ListeEntt$METHODE_CONTROLE_REALISE == 'HISTORIQUE')] %in% Perimetre$CODE_ENTITE))
+  if(any(ListeEntt$CODE_ENTITE[which(ListeEntt$METHODE == 'HISTORIQUE')] %in% Perimetre$CODE_ENTITE))
   {
     #Chargement des effacements du mois en cours de traitement et du mois precedent
     Effacements <- mapply(SIMPLIFY = TRUE, FUN = LoadEffacements,dossier = paste(DIR_DATA,"/",format(seq.Date(from = as.Date(paste(mois,"01"),"%Y%m %d"),by = "-1 month",length.out = 2),"%Y%m"),sep=''))

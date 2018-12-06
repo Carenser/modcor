@@ -25,18 +25,18 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
         # if(substr(entite,1,3)!="EDE"){
         #
         #   cdcref <- CR_RectangleSimple(cdc=cdcagr30e,eff=eff)
-        #   METHODE_CONTROLE_REALISE = "RECTANGLE_MA"
+        #   METHODE = "RECTANGLE_MA"
         #
         # }else{
 
-        METHODE_CONTROLE_REALISE <- ListeEntt$METHODE_CONTROLE_REALISE[ListeEntt$CODE_ENTITE == entite][1]
+        METHODE <- ListeEntt$METHODE[ListeEntt$CODE_ENTITE == entite][1]
 
         #Si la methode est "PREVISION" et qu'il n'y a aucune prevision alors "RECTANGLE"
         #Si la methode est "HISTORIQUE" et qu'il n'y a aucune variante alors "RECTANGLE"
-        if(length(METHODE_CONTROLE_REALISE)==0 | is.na(METHODE_CONTROLE_REALISE))METHODE_CONTROLE_REALISE <- "RECTANGLE"
-        if((METHODE_CONTROLE_REALISE == "HISTORIQUE" & length(which(SitesHomol$CODE_SITE %in% sites)) == 0) | (METHODE_CONTROLE_REALISE == "PREVISION" & length(which(cdcPrev$CODE_SITE %in% sites)) == 0))
-        {            METHODE_CONTROLE_REALISE <- "RECTANGLE"          }
-        if(METHODE_CONTROLE_REALISE=="RECTANGLE"){
+        if(length(METHODE)==0 | is.na(METHODE))METHODE <- "RECTANGLE"
+        if((METHODE == "HISTORIQUE" & length(which(SitesHomol$CODE_SITE %in% sites)) == 0) | (METHODE == "PREVISION" & length(which(cdcPrev$CODE_SITE %in% sites)) == 0))
+        {            METHODE <- "RECTANGLE"          }
+        if(METHODE=="RECTANGLE"){
           if(substr(entite,1,3)!="EDE"){
             cdcref <- CR_RectangleSimple(cdc=cdcagr30e,eff=eff)
             cdcagr30e$PUISSANCE_effacee <- cdcref$PUISSANCE - cdcagr30e$PUISSANCE
@@ -57,11 +57,11 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
         cdcent<-cdc[cdc$CODE_ENTITE==entite,]
         cdcsites1<-list()
 
-        logprint(paste(entite,METHODE_CONTROLE_REALISE,"\n"))
+        logprint(paste(entite,METHODE,"\n"))
 
         for(j in 1:length(sites)){
 
-          if(length(sites)<=10)logprint(paste(sites[j],METHODE_CONTROLE_REALISE,"\n"))
+          if(length(sites)<=10)logprint(paste(sites[j],METHODE,"\n"))
 
           cdcsit<-cdcent[cdcent$CODE_SITE==sites[j],]
 
@@ -73,18 +73,18 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
 
             #2b Application des methodes a la maille site
 
-            if(METHODE_CONTROLE_REALISE=="SITE_A_SITE"){
+            if(METHODE=="SITE_A_SITE"){
               cdcref<-CR_RectangleDouble(cdc=cdcsit,eff=eff)
             }
 
-            if(METHODE_CONTROLE_REALISE=="PREVISION")
+            if(METHODE=="PREVISION")
             {
               cdcprevsit<-cdcPrev[cdcPrev$CODE_SITE == sites[j],]
               cdcref <- CR_Prev(cdcPrev = cdcprevsit,eff = eff,cdc = cdcsit)
               if(length(cdcref)==0)logprint(paste("Pas de CdC de prevision pour le site", sites[j]," : application du rectangle \n"))
             }
 
-            if(METHODE_CONTROLE_REALISE=="HISTORIQUE")
+            if(METHODE=="HISTORIQUE")
             {
               VARIANTE_HIST <- SitesHomol$VARIANTE_HIST[SitesHomol$CODE_SITE==sites[j]]
               if(length(VARIANTE_HIST) == 0) VARIANTE_HIST <- "MOY10J"
@@ -93,7 +93,7 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
 
             }
 
-            if(METHODE_CONTROLE_REALISE=="RECTANGLE" | length(cdcref)==0){
+            if(METHODE=="RECTANGLE" | length(cdcref)==0){
               if(substr(entite,1,3)!="EDE"){
                 cdcref <- CR_RectangleSimple(cdc=cdcsit,eff=eff)
               }else{
@@ -122,7 +122,7 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
         #cdcenteffagr<-aggregate(PUISSANCE_effacee~HORODATE_UTC+HORODATE,cdcsites,sum)
         cdcenteffagr<-aggregate(PUISSANCE_effacee~CODE_ENTITE+HORODATE_UTC+HORODATE,cdcsites,sum)#Plante si cdcsites vide suite au filtre
 
-        if(METHODE_CONTROLE_REALISE %in% c("HISTORIQUE","PREVISION")) cdcagr30e<-cdcenteffagr
+        if(METHODE %in% c("HISTORIQUE","PREVISION")) cdcagr30e<-cdcenteffagr
 
         #2d2 Recalage des volumes avec la capacite de l'EDE (exprimee en kW)
         if(substr(entite,1,3)=="EDE"){
