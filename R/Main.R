@@ -36,7 +36,7 @@ logprint<-function(string){
 
 logprint(paste("TRAITEMENT DU MODELE CORRIGE",format(Sys.time(),"%Y-%m-%d %H:%M:%S")))
 logprint(paste("Traitement du dossier",DIR_DATA))
-logprint(paste("Scripts stock?s dans ",DIR_SCRIPT))
+logprint(paste("Scripts stockés dans ",DIR_SCRIPT))
 
 #Chargement des fonctions et librairies necessaires au traitement
 source(paste(DIR_SCRIPT,"LoadData.R",sep="/"))
@@ -103,7 +103,7 @@ logprint(Synthese)
 ATraiter <- Synthese[which(is.na(Synthese$HorodateCreationCRMC_GRD) & is.na(Synthese$HorodateCreationCRMC_RTE)),]
 logprint("Fichiers ? traiter : ")
 logprint(ATraiter)
-if(nrow(ATraiter)==0)logprint("Aucun fichier ? traiter. Supprimez les fichiers 'MODECOR' et relancez le script")
+if(nrow(ATraiter)==0)logprint("Aucun fichier à traiter. Supprimez les fichiers 'MODECOR' et relancez le script")
 
 #Liste des mois existants
 Mois <- unique(ATraiter$Dossier)
