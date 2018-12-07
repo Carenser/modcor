@@ -1,31 +1,4 @@
 LoadPerimetre<-function(fichiers = NULL, dossiers){
-  # #1b P?rim?tre----
-  # lf<-list.files(dossier,pattern=".csv",full.names=T)
-  # lfperimma<-lf[regexpr("MA_REFST_TLRLV_GRD",lf)>0]
-  # if(length(lfperimma)==0){
-  #   logprint(paste("Pas de p?rim?tre MA dans",dossier,"\n"))
-  #   perimma=data.frame(CODE_ENTITE=NA,CAPA_MAX_H_SITE=NA,TYPE_SITE=NA,TYPE_CONTRAT=NA,ID_SITE=NA,CATEGORIE=NA,mecanisme=NA)[0,]
-  # }else{
-  #   perimma<-suppressMessages(read_csv2(file = lfperimma[length(lfperimma)], skip = 2, col_names = TRUE, comment = "<EOF>"))
-  #   names(perimma)[names(perimma)=="CODE_EDA"]<-"CODE_ENTITE"
-  #   perimma$mecanisme="MA"
-  # }
-  # lfperimnebef<-lf[regexpr("NEBEF_REFST_TLRLV_GRD",lf)>0 | regexpr("NEBEF_REFST_TLRV_GRD",lf)>0]
-  # if(length(lfperimnebef)==0){
-  #   logprint(paste("Pas de p?rim?tre Nebef dans",dossier,"\n"))
-  #   perimnebef=data.frame(CODE_ENTITE=NA,CAPA_MAX_H_SITE=NA,TYPE_SITE=NA,TYPE_CONTRAT=NA,ID_SITE=NA,CATEGORIE=NA,mecanisme=NA)[0,]
-  # }else{
-  #   perimnebef<-suppressMessages(read_csv2(file = lfperimnebef[length(lfperimnebef)], skip = 2, col_names = TRUE, comment = "<EOF>"))
-  #   names(perimnebef)[names(perimnebef)=="CODE_EDE"]<-"CODE_ENTITE"
-  #   perimnebef$mecanisme="NEBEF"
-  # }
-  # names<-c("CODE_ENTITE","TYPE_SITE","ID_SITE","CAPA_MAX_H_SITE","TYPE_CONTRAT","CATEGORIE","mecanisme")
-  # perims<-rbind(perimnebef[,names],perimma[,names])
-  # perims<-perims[perims$CODE_ENTITE!="",]
-  # perims$CAPA_MAX_H_SITE<-as.numeric(perims$CAPA_MAX_H_SITE)
-  # perims$CODE_SITE<-paste(perims$TYPE_SITE,perims$ID_SITE,sep="")
-  # logprint(paste(nrow(perims),"sites inclus dans le perimetre"))
-  # return(perims[,names(perims)[!names(perims) %in% c("TYPE_SITE","ID_SITE")]])
 
   if(is.null(fichiers))
   {
@@ -113,7 +86,7 @@ LoadPerimetre<-function(fichiers = NULL, dossiers){
                   , TYPE_CONTRAT
                   , CATEGORIE
                 ) %>% #On ajoute les colonnes de début et fin de période et le mécanisme
-                tibble::add_column(DEBUT = as_date(z), FIN = as_date(z) + lubridate::days_in_month(z) - lubridate::days(1), MECANISME = y, .before = 1) %>%
+                tibble::add_column(DEBUT = as_date(z), FIN = as_date(z) + lubridate::days_in_month(as_date(z)) - lubridate::days(1), MECANISME = y, .before = 1) %>%
                 dplyr::filter(CODE_ENTITE != 'N') # On supprime les lignes sans entité du mécanisme
             )
           }
@@ -124,7 +97,7 @@ LoadPerimetre<-function(fichiers = NULL, dossiers){
 
 #' Chargement des fichiers de programme d'effacements retenus et d'ordres d'activations consolidés en J+3 aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
-#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param dossiers le(s) nom(s) de répertoire contenant les fichiers passés en paramètre
 #'
 #' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, DEBUT, FIN, SIGNE, DMO
 #' @export
@@ -271,7 +244,7 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
 
 #' Chargement des fichiers de courbes de charges aux formats prévues dans les règles SI décrivant les flux en provenance des GRD à destination de RTE
 #'
-#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre (facultatif)
+#' @param dossiers le(s) nom(s) de répertoire contenant les fichiers passés en paramètre (facultatif)
 #' @param fichiers un vecteur contenant les noms des fichiers de courbes de charges
 #'
 #' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, PUISSANCE
@@ -392,20 +365,6 @@ LoadCdC<-function(fichiers, dossiers = NULL){
 #' @import lubridate
 #' @examples
 LoadListeEntt<-function(dossiers, fichiers = NULL){
-  # for(type in c("A","E")){
-  #   lfle<-list.files(dossier,pattern=paste0("LISTE_ED",type,"_GRD_"))
-  #   lfle<-lfle[regexpr(".csv",lfle)>0]
-  #   if(length(lfle)>0){
-  #     suppressWarnings(ListeEntt1<-read.csv2(paste(dossier,lfle[length(lfle)],sep="/"), stringsAsFactors = FALSE))
-  #     names(ListeEntt1)[names(ListeEntt1)==paste0("CODE_ED",type)]<-"CODE_ENTITE"
-  #     ListeEntt1<-ListeEntt1[,c("CODE_ENTITE","METHODE_CONTROLE_REALISE")]
-  #     if(exists("ListeEntt"))ListeEntt<-rbind(ListeEntt,ListeEntt1)else ListeEntt<-ListeEntt1
-  #   }else{
-  #     logprint(paste0("Fichier des ED",type," actives non trouve. La methode du rectangle sera appliquee a toutes les ED",type))
-  #   }
-  # }
-  # if(!exists("ListeEntt"))ListeEntt<-data.frame(CODE_ENTITE=NA,METHODE_CONTROLE_REALISE=NA)[0,]
-  # return(ListeEntt)
 
   if(is.null(fichiers))
   {
@@ -424,7 +383,7 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$|^LISTE_EDE_GRD_([0-9]{14}).csv$")))
   {
-    stop("aucun fichier de listing des entités conforme à la nomenclature prévue dans les règles SI MA ou NEBEF")
+    warning("Aucun fichier de listing des entités conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.")
 
   }else{
 
@@ -450,7 +409,7 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
           )
           , .f = function(x,y,z){
 
-            if(stringr::str_detect(string = x, pattern = "LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$$")){ # Traitement des fichiers MA
+            if(stringr::str_detect(string = x, pattern = "LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$")){ # Traitement des fichiers MA
 
               readr::read_delim(
                 file = x
@@ -468,8 +427,8 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
                 dplyr::transmute(
                   CODE_ENTITE = CODE_EDA
                   , METHODE
-                  , DEBUT = z
-                  , FIN = rollback(z,roll_to_first = T) + lubridate::days_in_month(z) - lubridate::days(1)
+                  , DEBUT = as_date(z)
+                  , FIN = rollback(as_date(z),roll_to_first = T) + lubridate::days_in_month(as_date(z)) - lubridate::days(1)
                 ) %>% #On renomme la table avec des noms communs aux différents mécanismes
                 tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
 
@@ -569,7 +528,7 @@ LoadPrev<-function(dossier, pas = 600){
     #Journee d'effacement correspondante
     lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
 
-    #M?canisme
+    #Mécanisme
     lfprev$Mec = substr(gsub(dossier,"",lfprev$Lien),2,4)
 
     #Tri des fichiers par Jour et horodate de création
