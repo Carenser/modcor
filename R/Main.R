@@ -93,7 +93,7 @@ Synthese <- merge(y = Fichiers[which(with(data = Fichiers, Type == "CRMC" & Sour
 
 Synthese <- merge(y = Fichiers[which(with(data = Fichiers, Type == "CRMC" & Source == "RTE")),c('Mecanisme','Dossier','HorodateCreation')],
                   x = Synthese ,by.x = c('Mecanisme','Dossier'),by.y = c('Mecanisme','Dossier'), all.x = TRUE, suffixes = c("CRMC_GRD","CRMC_RTE"))
-logprint("Fichiers stock?s : ")
+logprint("Fichiers stockés : ")
 logprint(Synthese)
 
 

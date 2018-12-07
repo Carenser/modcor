@@ -86,7 +86,7 @@ LoadPerimetre<-function(fichiers = NULL, dossiers){
                   , TYPE_CONTRAT
                   , CATEGORIE
                 ) %>% #On ajoute les colonnes de début et fin de période et le mécanisme
-                tibble::add_column(DEBUT = as_date(z), FIN = as_date(z) + lubridate::days_in_month(as_date(z)) - lubridate::days(1), MECANISME = y, .before = 1) %>%
+                tibble::add_column(DEBUT = lubridate::as_date(z), FIN = lubridate::as_date(z) + lubridate::days_in_month(as_date(z)), MECANISME = y, .before = 1) %>%
                 dplyr::filter(CODE_ENTITE != 'N') # On supprime les lignes sans entité du mécanisme
             )
           }
@@ -359,7 +359,7 @@ LoadCdC<-function(fichiers, dossiers = NULL){
 #' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
 #' @param fichiers un vecteur contenant les noms des fichiers de listing des entités  (facultatif)
 #'
-#' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN
+#' @return un dataframe comprenant 5 colonnes : MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN
 #' @export
 #' @import tidyverse
 #' @import lubridate
@@ -428,7 +428,7 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
                   CODE_ENTITE = CODE_EDA
                   , METHODE
                   , DEBUT = as_date(z)
-                  , FIN = rollback(as_date(z),roll_to_first = T) + lubridate::days_in_month(as_date(z)) - lubridate::days(1)
+                  , FIN = rollback(as_date(z),roll_to_first = T) + lubridate::days_in_month(as_date(z)) # date de fin exclue en sortie
                 ) %>% #On renomme la table avec des noms communs aux différents mécanismes
                 tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
 
@@ -452,8 +452,12 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
                     )
                   , skip = 0
                 ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
-                  dplyr::select(CODE_EDE,METHODE_CONTROLE_REALISE,DATE_DEBUT_VALIDITE,DATE_FIN_VALIDITE) %>% # On supprime les colonnes inutiles
-                  dplyr::rename(CODE_ENTITE = CODE_EDE,METHODE = METHODE_CONTROLE_REALISE,DEBUT = DATE_DEBUT_VALIDITE,FIN = DATE_FIN_VALIDITE) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                  dplyr::transmute(
+                    CODE_ENTITE = CODE_EDE
+                    , METHODE = METHODE_CONTROLE_REALISE
+                    , DEBUT = DATE_DEBUT_VALIDITE
+                    , FIN = DATE_FIN_VALIDITE + lubridate::days(1) # date de fin exclue en sortie
+                  ) %>% # On supprime les colonnes inutiles en renommant la table avec des noms communs aux différents mécanismes
                   tibble::add_column(MECANISME = y,.before = 1)
               }
             }
@@ -463,24 +467,102 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
   }
 }
 
-LoadSitesHomol<-function(dossier=""){
-  lfsh<-list.files(dossier,pattern="_SITES_HOMOL_GRD_")
-  lfsh<-lfsh[regexpr(".csv",lfsh)>0]
-  lfsh<-lfsh[file.info(paste(dossier,lfsh,sep="/"))$size>170]
-  sh<-list()
-  for(f in lfsh){
-    sh[[length(sh)+1]]<-read.csv2(paste(dossier,f,sep="/"),skip=2, stringsAsFactors = FALSE)
+#' Chargement des fichiers de listing des sites homologués aux méthodes historique et prévision aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
+#'
+#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param fichiers un vecteur contenant les noms des fichiers de listing des sites homologués (facultatif)
+#'
+#' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_SITE, METHODE, DEBUT, FIN, VARIANTE
+#' @export
+#' @import tidyverse
+#' @import lubridate
+#' @examples
+LoadSitesHomol<-function(dossiers,fichiers = NULL){
+
+  if(is.null(fichiers))
+  {
+    fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")
+
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-  if(length(sh)>0){
-    shh<-do.call("rbind",sh)
-    shh<-shh[shh$CODE_EXT_SITE!="<EOF>",]
-    shh<-shh[!duplicated(shh[,c("CODE_EXT_SITE","VARIANTE_HIST")]),]
+
+  if(is.null(dossiers))
+  {
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
+
+  #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
+  if(!any(stringr::str_detect(string = fichiers,pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")))
+  {
+    warning("Aucun fichier d'homologation des sites conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.")
+    return(tibble(MECANISME=character(),CODE_SITE=character(),METHODE=character(),DEBUT=as_date(integer()),FIN=as_date(integer()),VARIANTE=character()))
+
   }else{
-    logprint("Pas de fichier contenant les variantes retenues pour la methode par historique")
-    SitesHomol<-data.frame(CODE_EXT_SITE=NA,VARIANTE_HIST=NA)[0,]
+
+    stringr::str_match(string =  fichiers, pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
+      dplyr::as_tibble() %>%
+      dplyr::transmute(
+        dossier = dossiers
+        , fichier = V1
+        , mecanisme = V2
+        , horodate_creation = lubridate::ymd_hms(V3,tz = 'CET')
+      ) %>%
+      dplyr::filter(str_detect(string = fichier, pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")) %>% # On ne conserve que les fichiers de listing des entités
+      dplyr::arrange(mecanisme, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité version (declaratif/final) et horodate de création
+      dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée (pour NEBEF on ne conserve que le dernier fichier créé)
+      {
+        purrr::pmap_dfr(
+          .l = list(
+            x = str_c(.$dossier,.$fichier,sep='')
+            , y = .$mecanisme
+          )
+          , .f = function(x,y,z){
+            suppressWarnings(
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(decimal_mark = ',',date_format = '%Y%m%d')
+                , comment = '<EOF>'
+                , col_types =
+                  list(
+                    CODE_EXT_SITE = 'c'
+                    , DATE_DEBUT_HOMOL_PREV = 'D'
+                    , DATE_FIN_HOMOL_PREV = 'D'
+                    , DATE_DEBUT_HOMOL_HIST = 'D'
+                    , DATE_FIN_HOMOL_HIST = 'D'
+                    , VARIANTE_HIST = 'c'
+                    , .default = 'i'
+                  )
+                , skip = 2
+              ))
+          test2 %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+              {
+                bind_rows(
+                  dplyr::transmute(.data = .
+                    , CODE_SITE = CODE_EXT_SITE
+                    , DEBUT = DATE_DEBUT_HOMOL_PREV
+                    , FIN = coalesce(DATE_FIN_HOMOL_PREV,as_date('2099-12-31')) # date de fin exclue en sortie
+                  ) %>%
+                    dplyr::filter(!is.na(DEBUT)) %>%
+                    add_column(METHODE = 'PREVISION',.before = 2) %>%
+                    add_column(VARIANTE = NA)
+                  , dplyr::transmute(.data = .
+                    , CODE_SITE = CODE_EXT_SITE
+                    , DEBUT = DATE_DEBUT_HOMOL_HIST
+                    , FIN = coalesce(DATE_FIN_HOMOL_HIST,as_date('2099-12-31')) # date de fin exclue en sortie
+                    , VARIANTE = VARIANTE_HIST
+                  ) %>%
+                    dplyr::filter(!is.na(DEBUT)) %>%
+                    add_column(METHODE = 'HISTORIQUE',.before = 2)
+                )
+              } %>% #On renomme la table avec des noms communs aux différents mécanismes
+              tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
+          }
+        )
+      }
   }
-  names(SitesHomol)[names(SitesHomol)=="CODE_EXT_SITE"]<-"CODE_SITE"
-  return(SitesHomol[,c("CODE_SITE","VARIANTE_HIST")])
 }
 
 LoadIndHist<-function(dirs=""){#on charge le dernier fichier Indispo connu

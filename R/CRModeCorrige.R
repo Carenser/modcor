@@ -86,10 +86,10 @@ CRModeCorrige <- function(cdc,perimetre,effacements,effacementshisto,ListeEntt,S
 
             if(METHODE=="HISTORIQUE")
             {
-              VARIANTE_HIST <- SitesHomol$VARIANTE_HIST[SitesHomol$CODE_SITE==sites[j]]
-              if(length(VARIANTE_HIST) == 0) VARIANTE_HIST <- "MOY10J"
+              VARIANTE <- SitesHomol$VARIANTE[SitesHomol$CODE_SITE==sites[j]]
+              if(length(VARIANTE) == 0) VARIANTE <- "MOY10J"
 
-              cdcref <- CR_Histo(cdc=cdcsit,eff=eff,VARIANTE_HIST=VARIANTE_HIST,DATE_INDISPO=c(IndHistEff,IndHist$DATE_INDISPO[IndHist$CODE_SITE==sites[j]]))
+              cdcref <- CR_Histo(cdc=cdcsit,eff=eff,VARIANTE=VARIANTE,DATE_INDISPO=c(IndHistEff,IndHist$DATE_INDISPO[IndHist$CODE_SITE==sites[j]]))
 
             }
 
