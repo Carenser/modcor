@@ -795,8 +795,8 @@ LoadSitesHomol<-function(dossiers,fichiers = NULL){
                     , .default = 'i'
                   )
                 , skip = 2
-              ))
-            test2 %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+              )) %>%
+            #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
             {
               bind_rows(
                 dplyr::transmute(.data = .
