@@ -1,3 +1,13 @@
+#' Chargement des fichiers de périmètre de flexibilités aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
+#'
+#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param fichiers un vecteur contenant les noms des fichiers de périmètre  (facultatif)
+#'
+#' @return un dataframe comprenant 5 colonnes : DEBUT, FIN, MECANISME, CODE_ENTITE, CODE_SITE, CAPACITE_MAX_H_SITE, CATEGORIE, TYPE_CONTRAT
+#' @export
+#' @import tidyverse
+#' @import lubridate
+#' @examples
 LoadPerimetre<-function(fichiers = NULL, dossiers){
 
   if(is.null(fichiers))
@@ -98,10 +108,11 @@ LoadPerimetre<-function(fichiers = NULL, dossiers){
 #' Chargement des fichiers de programme d'effacements retenus et d'ordres d'activations consolidés en J+3 aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
 #' @param dossiers le(s) nom(s) de répertoire contenant les fichiers passés en paramètre
+#' @param fichiers un vecteur contenant les noms des fichiers de courbes de charges
 #'
 #' @return un dataframe comprenant 5 colonnes : CODE_ENTITE, DEBUT, FIN, SIGNE, DMO
 #' @export
-#' @import reshape2
+#' @import lubridate
 #' @import tidyverse
 #' @examples
 LoadEffacements <- function(dossiers, fichiers = NULL)
@@ -354,6 +365,254 @@ LoadCdC<-function(fichiers, dossiers = NULL){
   }
 }
 
+
+#' Chargement des fichiers de courbes de prévision aux formats prévues dans les règles SI décrivant les flux en provenance des GRD à destination de RTE
+#'
+#' @param dossiers le(s) nom(s) de répertoire contenant les fichiers passés en paramètre (facultatif)
+#' @param fichiers un vecteur contenant les noms des fichiers de courbes de prévision
+#'
+#' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, PUISSANCE
+#' @export
+#' @import tidyverse
+#' @import lubridate
+#' @examples
+LoadPrev<-function(dossiers, fichiers = NULL, pas = 600){
+
+  # if(dir.exists(dossier))
+  # {
+  #   #Fichiers de programme d'Effacement Retenus
+  #   lfprev <- list.files(path = dossier, pattern = "_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_[0-9]{14}.csv", full.names = TRUE)
+  #   lfprev <- file.info(lfprev,extra_cols = TRUE)
+  #   lfprev$Lien = rownames(lfprev)
+  #   rownames(lfprev) <- NULL
+  #
+  #   #Horodate de création figurant dans le nom du fichier
+  #   lfprev$HorodateCreation = as.POSIXct(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
+  #
+  #   #Journee d'effacement correspondante
+  #   lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
+  #
+  #   #Mécanisme
+  #   lfprev$Mec = substr(gsub(dossier,"",lfprev$Lien),2,4)
+  #
+  #   #Tri des fichiers par Jour et horodate de création
+  #   lfprev <- lfprev[order(lfprev$JourPrevision,lfprev$HorodateCreation, decreasing = TRUE),]
+  #
+  #   #Dédoublonnage des fichiers de CdC en selectionnant les plus récents par Jour d'effacement
+  #   lfprev <- lfprev[!duplicated(lfprev[,c('JourPrevision','Mec')]),]
+  #
+  #   #Fichiers non vides (superieur a 390 octets)
+  #   lfprev <- lfprev[which(lfprev$size > 390),]
+  #
+  #   prevData <- data.frame(CODE_ENTITE = NA, CODE_SITE = NA, horodate = NA, horodateutc = NA, puissance = NA)[0,]
+  #
+  #   if( nrow(lfprev) > 0 ){
+  #
+  #     for(i in 1:nrow(lfprev)){
+  #
+  #       prevFile <- lfprev[i,]
+  #
+  #       prevDataTemp <- suppressWarnings(read.table(file = prevFile$Lien, skip = 2, fill = TRUE, comment.char = "<", header = TRUE, sep = ';',dec = ',', stringsAsFactors = FALSE))
+  #
+  #       for(j in 1:nrow(prevDataTemp))
+  #       {
+  #         #Jour de prévision
+  #         jour <- as.Date.character(x = prevDataTemp$DATE[j], format = "%Y%m%d")
+  #
+  #         #Début de la chronique
+  #         deb <- as.POSIXct(x = paste(jour, '00:00:00'))
+  #
+  #         #Entité correspondante
+  #         EDE <- as.character(prevDataTemp$CODE_EDE[j])
+  #
+  #         Site <- as.character(prevDataTemp$CODE_EXT_SITE[j])
+  #
+  #         #Nombre de points de CdC pour ce "jour"
+  #         NbPts <- prevDataTemp$NB_PTS_CHRONIQUE[j]
+  #
+  #         #Définition du pas de temps
+  #         pdt <-  switch(EXPR = as.character(NbPts)
+  #                        , '48' = 1800
+  #                        , '50' = 1800
+  #                        , '36' = 1800
+  #                        , '136' = 600
+  #                        , '144' = 600
+  #                        , '150' = 600)
+  #
+  #         #Fin de la chronique
+  #         fin <- as.POSIXct(x = paste(jour + 1, '00:00:00')) - pdt
+  #
+  #         #création de la chronique
+  #         chron <- seq.POSIXt(from = deb, by = pdt, to = fin)
+  #
+  #         chronUTC <- chron
+  #         attr(chronUTC, "tzone") <- "UTC"
+  #
+  #         #Valeurs de puissance exprimée en kW (Attention aux chiffres significatifs)
+  #         puissance <- as.numeric(unlist(prevDataTemp[j,paste('VAL',1:NbPts,sep='')], use.names = FALSE))
+  #
+  #         tempdata = cbind.data.frame(CODE_ENTITE = EDE, CODE_SITE = Site, horodate = chron, horodateutc = chronUTC, puissance = puissance, stringsAsFactors = FALSE)
+  #
+  #
+  #         if(pdt > pas)
+  #         {
+  #           tempdata = as.data.frame(apply(tempdata, MARGIN = 2, FUN = function(x){rep(x, each = pdt/pas)}))
+  #           tempdata$horodate = seq.POSIXt(from = deb, by = pas, to = as.POSIXct(x = paste(jour + 1, '00:00:00')) - pas)
+  #           tempdata$horodateutc = tempdata$horodate
+  #           attr(tempdata$horodateutc, "tzone") <- "UTC"
+  #         }
+  #
+  #         #Compilation des effacements
+  #         prevData <- rbind.data.frame(prevData, tempdata)
+  #
+  #       }
+  #
+  #     }
+  #     prevData$puissance<-as.numeric(prevData$puissance)
+  #   }else{
+  #
+  #     logprint(paste("Pas de fichier prev dans",dossier))
+  #   }
+  #
+  #   return(prevData)
+  #
+  # }else{
+  #
+  #   logprint(paste("Dossier",dossier,"introuvable !"))
+  #
+  # }
+
+  if(is.null(fichiers))
+  {
+    fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")
+
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
+
+  if(is.null(dossiers))
+  {
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
+
+  #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
+  if(!any(stringr::str_detect(string = fichiers,pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")))
+  {
+    warning('aucun fichier de courbe de prévision conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
+
+  }else{
+
+    stringr::str_match(string =  fichiers, pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$") %>%
+      dplyr::as_tibble() %>%
+      dplyr::transmute(
+        dossier = dossiers
+        , fichier = V1
+        , mecanisme = V2
+        , horodate_creation = ymd_hms(V4,tz = 'CET')
+        , date_validite = as_date(V3)
+      ) %>%
+      dplyr::filter(str_detect(string = fichier, pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")) %>% # On ne conserve que les fichiers de CdC
+      dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
+      dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée
+      {
+        purrr::pmap_dfr(
+          .l = list(
+            x = str_c(.$dossier,.$fichier,sep='')
+            , y = .$mecanisme
+            , z = .$horodate_creation
+          )
+          , .f = function(x,y,z){
+
+            if(y == 'MA'){
+
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
+                , comment = '<EOF>'
+                , col_types =
+                  list(
+                    CODE_EDA = 'c'
+                    , CODE_EXT_SITE = 'c'
+                    , DATE = 'D'
+                    , NB_PTS_CHRONIQUE = 'i'
+                    , .default = 'd'
+                  )
+                , skip = 2
+              ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                dplyr::rename(CODE_ENTITE = CODE_EDA,CODE_SITE = CODE_EXT_SITE) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                tidyr::gather(- CODE_ENTITE, - CODE_SITE, - DATE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
+                dplyr::mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique en retranchant 1
+                dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
+                dplyr::mutate(MINUTE = (60 * 24 * MINUTE)/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
+                dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                dplyr::transmute(
+                  CODE_ENTITE
+                  , CODE_SITE
+                  , HORODATE
+                  , HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC')
+                  , PUISSANCE
+                  , PAS = as.integer(dplyr::case_when(
+                    NB_PTS_CHRONIQUE %in% c(36,48,50) ~ 1800
+                    , NB_PTS_CHRONIQUE %in% c(136,144,150) ~ 600
+                    , NB_PTS_CHRONIQUE %in% c(276,288,300) ~ 300
+                    , TRUE ~ NA_real_
+                  ))
+                ) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                tibble::add_column(HORODATE_CREATION = z, MECANISME = y,.before = 1)
+
+            }else{
+
+              if(y=='NEBEF'){
+
+                readr::read_delim(
+                  file = x
+                  , delim = ';'
+                  , locale = locale(date_format = '%Y%m%d', decimal_mark = ',', tz = 'CET')
+                  , comment = '<EOF>'
+                  , col_types =
+                    list(
+                      CODE_EDE = 'c'
+                      , CODE_EXT_SITE = 'c'
+                      , DATE = 'D'
+                      , NB_PTS_CHRONIQUE = 'i'
+                      , .default = 'd'
+                    )
+                  , skip = 2
+                ) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+                  dplyr::rename(CODE_ENTITE = CODE_EDE,CODE_SITE = CODE_EXT_SITE) %>% #On renomme la table avec des noms communs aux différents mécanismes
+                  tidyr::gather(- CODE_ENTITE, - CODE_SITE, - DATE, - NB_PTS_CHRONIQUE, key = 'MINUTE', value = 'PUISSANCE') %>% #On transpose la table en ligne
+                  dplyr::mutate(MINUTE = parse_integer(str_extract(string = MINUTE, pattern = '[0-9]+')) - 1) %>% # On interprète le nom de la colonne VAL en numérique en retranchant 1
+                  dplyr::filter(MINUTE < NB_PTS_CHRONIQUE) %>% #On filtre les points inutiles (VAL150, etc, ...)
+                  dplyr::mutate(MINUTE = (60 * 24 * MINUTE)/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
+                  dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
+                  dplyr::transmute(
+                    CODE_ENTITE
+                    , CODE_SITE
+                    , HORODATE
+                    , HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC')
+                    , PUISSANCE
+                    , PAS = as.integer(dplyr::case_when(
+                      NB_PTS_CHRONIQUE %in% c(36,48,50) ~ 1800
+                      , NB_PTS_CHRONIQUE %in% c(136,144,150) ~ 600
+                      , NB_PTS_CHRONIQUE %in% c(276,288,300) ~ 300
+                      , TRUE ~ NA_real_
+                    ))
+                  ) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
+                  tibble::add_column(HORODATE_CREATION = z, MECANISME = y,.before = 1)
+              }
+            }
+          }
+        )
+      } %>%
+      arrange(CODE_ENTITE,CODE_SITE,HORODATE_UTC,desc(HORODATE_CREATION)) %>%
+      distinct(CODE_ENTITE,CODE_SITE,HORODATE_UTC,.keep_all = TRUE) %>% #On dedoublonne les chroniques en conservant l'horodate de création la plus récente
+      select(-HORODATE_CREATION)
+  }
+}
+
+
 #' Chargement des fichiers de listing des entités aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
 #' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
@@ -537,27 +796,27 @@ LoadSitesHomol<-function(dossiers,fichiers = NULL){
                   )
                 , skip = 2
               ))
-          test2 %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
-              {
-                bind_rows(
-                  dplyr::transmute(.data = .
-                    , CODE_SITE = CODE_EXT_SITE
-                    , DEBUT = DATE_DEBUT_HOMOL_PREV
-                    , FIN = coalesce(DATE_FIN_HOMOL_PREV,as_date('2099-12-31')) # date de fin exclue en sortie
-                  ) %>%
-                    dplyr::filter(!is.na(DEBUT)) %>%
-                    add_column(METHODE = 'PREVISION',.before = 2) %>%
-                    add_column(VARIANTE = NA)
-                  , dplyr::transmute(.data = .
-                    , CODE_SITE = CODE_EXT_SITE
-                    , DEBUT = DATE_DEBUT_HOMOL_HIST
-                    , FIN = coalesce(DATE_FIN_HOMOL_HIST,as_date('2099-12-31')) # date de fin exclue en sortie
-                    , VARIANTE = VARIANTE_HIST
-                  ) %>%
-                    dplyr::filter(!is.na(DEBUT)) %>%
-                    add_column(METHODE = 'HISTORIQUE',.before = 2)
-                )
-              } %>% #On renomme la table avec des noms communs aux différents mécanismes
+            test2 %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+            {
+              bind_rows(
+                dplyr::transmute(.data = .
+                                 , CODE_SITE = CODE_EXT_SITE
+                                 , DEBUT = DATE_DEBUT_HOMOL_PREV
+                                 , FIN = coalesce(DATE_FIN_HOMOL_PREV,as_date('2099-12-31')) # date de fin exclue en sortie
+                ) %>%
+                  dplyr::filter(!is.na(DEBUT)) %>%
+                  add_column(METHODE = 'PREVISION',.before = 2) %>%
+                  add_column(VARIANTE = NA)
+                , dplyr::transmute(.data = .
+                                   , CODE_SITE = CODE_EXT_SITE
+                                   , DEBUT = DATE_DEBUT_HOMOL_HIST
+                                   , FIN = coalesce(DATE_FIN_HOMOL_HIST,as_date('2099-12-31')) # date de fin exclue en sortie
+                                   , VARIANTE = VARIANTE_HIST
+                ) %>%
+                  dplyr::filter(!is.na(DEBUT)) %>%
+                  add_column(METHODE = 'HISTORIQUE',.before = 2)
+              )
+            } %>% #On renomme la table avec des noms communs aux différents mécanismes
               tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
           }
         )
@@ -584,122 +843,6 @@ LoadIndHist<-function(dirs=""){#on charge le dernier fichier Indispo connu
 }
 
 LoadPEIF<-function(dossier=""){}
-
-#' Title
-#'
-#' @param dossier
-#' @param pas
-#'
-#' @return
-#' @export
-#' @import tidyverse
-#' @examples
-LoadPrev<-function(dossier, pas = 600){
-
-  if(dir.exists(dossier))
-  {
-    #Fichiers de programme d'Effacement Retenus
-    lfprev <- list.files(path = dossier, pattern = "_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_[0-9]{14}.csv", full.names = TRUE)
-    lfprev <- file.info(lfprev,extra_cols = TRUE)
-    lfprev$Lien = rownames(lfprev)
-    rownames(lfprev) <- NULL
-
-    #Horodate de création figurant dans le nom du fichier
-    lfprev$HorodateCreation = as.POSIXct(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_[0-9]{8}_([0-9]{14}).csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d%H%M%S")
-
-    #Journee d'effacement correspondante
-    lfprev$JourPrevision = as.Date(x = gsub(x = lfprev$Lien, pattern = paste(dossier,"_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_[0-9]{14}.csv", sep="/"), replacement = "\\1",perl = TRUE), format = "%Y%m%d")
-
-    #Mécanisme
-    lfprev$Mec = substr(gsub(dossier,"",lfprev$Lien),2,4)
-
-    #Tri des fichiers par Jour et horodate de création
-    lfprev <- lfprev[order(lfprev$JourPrevision,lfprev$HorodateCreation, decreasing = TRUE),]
-
-    #Dédoublonnage des fichiers de CdC en selectionnant les plus récents par Jour d'effacement
-    lfprev <- lfprev[!duplicated(lfprev[,c('JourPrevision','Mec')]),]
-
-    #Fichiers non vides (superieur a 390 octets)
-    lfprev <- lfprev[which(lfprev$size > 390),]
-
-    prevData <- data.frame(CODE_ENTITE = NA, CODE_SITE = NA, horodate = NA, horodateutc = NA, puissance = NA)[0,]
-
-    if( nrow(lfprev) > 0 ){
-
-      for(i in 1:nrow(lfprev)){
-
-        prevFile <- lfprev[i,]
-
-        prevDataTemp <- suppressWarnings(read.table(file = prevFile$Lien, skip = 2, fill = TRUE, comment.char = "<", header = TRUE, sep = ';',dec = ',', stringsAsFactors = FALSE))
-
-        for(j in 1:nrow(prevDataTemp))
-        {
-          #Jour de prévision
-          jour <- as.Date.character(x = prevDataTemp$DATE[j], format = "%Y%m%d")
-
-          #Début de la chronique
-          deb <- as.POSIXct(x = paste(jour, '00:00:00'))
-
-          #Entité correspondante
-          EDE <- as.character(prevDataTemp$CODE_EDE[j])
-
-          Site <- as.character(prevDataTemp$CODE_EXT_SITE[j])
-
-          #Nombre de points de CdC pour ce "jour"
-          NbPts <- prevDataTemp$NB_PTS_CHRONIQUE[j]
-
-          #Définition du pas de temps
-          pdt <-  switch(EXPR = as.character(NbPts)
-                         , '48' = 1800
-                         , '50' = 1800
-                         , '36' = 1800
-                         , '136' = 600
-                         , '144' = 600
-                         , '150' = 600)
-
-          #Fin de la chronique
-          fin <- as.POSIXct(x = paste(jour + 1, '00:00:00')) - pdt
-
-          #création de la chronique
-          chron <- seq.POSIXt(from = deb, by = pdt, to = fin)
-
-          chronUTC <- chron
-          attr(chronUTC, "tzone") <- "UTC"
-
-          #Valeurs de puissance exprimée en kW (Attention aux chiffres significatifs)
-          puissance <- as.numeric(unlist(prevDataTemp[j,paste('VAL',1:NbPts,sep='')], use.names = FALSE))
-
-          tempdata = cbind.data.frame(CODE_ENTITE = EDE, CODE_SITE = Site, horodate = chron, horodateutc = chronUTC, puissance = puissance, stringsAsFactors = FALSE)
-
-
-          if(pdt > pas)
-          {
-            tempdata = as.data.frame(apply(tempdata, MARGIN = 2, FUN = function(x){rep(x, each = pdt/pas)}))
-            tempdata$horodate = seq.POSIXt(from = deb, by = pas, to = as.POSIXct(x = paste(jour + 1, '00:00:00')) - pas)
-            tempdata$horodateutc = tempdata$horodate
-            attr(tempdata$horodateutc, "tzone") <- "UTC"
-          }
-
-          #Compilation des effacements
-          prevData <- rbind.data.frame(prevData, tempdata)
-
-        }
-
-      }
-      prevData$puissance<-as.numeric(prevData$puissance)
-    }else{
-
-      logprint(paste("Pas de fichier prev dans",dossier))
-    }
-
-    return(prevData)
-
-  }else{
-
-    logprint(paste("Dossier",dossier,"introuvable !"))
-
-  }
-}
 
 logprint<-function(logText, logFileName = NULL){
 
