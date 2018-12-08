@@ -179,7 +179,7 @@ for(mois in Mois){
     effacements <- Effacements[as.Date(Effacements$FIN)>=as.Date(semaine,format="%Y%m%d") & as.Date(Effacements$DEBUT)<=as.Date(semaine,format="%Y%m%d")+6,]
 
     #Filtre sur les previsions de la semaine
-    cdcPrevHebdo <- cdcPrev[as.Date(cdcPrev$horodate)>=as.Date(semaine,format="%Y%m%d") & as.Date(cdcPrev$horodate)<=as.Date(semaine,format="%Y%m%d")+6,]
+    cdcPrevHebdo <- cdcPrev[as.Date(cdcPrev$HORODATE)>=as.Date(semaine,format="%Y%m%d") & as.Date(cdcPrev$HORODATE)<=as.Date(semaine,format="%Y%m%d")+6,]
 
     if(nrow(effacements)>0){
       historique<-Synthese[as.Date(Synthese$Periode,format="%Y%m%d")>=as.Date(semaine,format="%Y%m%d")-35
