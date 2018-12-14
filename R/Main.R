@@ -124,26 +124,26 @@ for(mois in Mois){
   EnCours <- ATraiter[ATraiter$Dossier == mois,]
 
   #Chargement du perimetre du mois a traiter
-  Perimetre<-LoadPerimetre(dossier)
+  Perimetre<-LoadPerimetre(dossiers = dossier)
   Perimetre<-Perimetre[!duplicated(Perimetre[,c("CODE_ENTITE","CODE_SITE")]),]
 
   #Chargement de la liste des EDE actives pour les methodes de CR associees
-  ListeEntt<-LoadListeEntt(dossier)
+  ListeEntt<-LoadListeEntt(dossiers = dossier)
 
   #Chargement de la liste des sites homologues pour les variantes
-  SitesHomol <- LoadSitesHomol(dossier)
+  SitesHomol <- LoadSitesHomol(dossiers = dossier)
 
   #Chargement des jours d'indisponibilites
-  IndHist <- LoadIndHist(dossier)
+  IndHist <- LoadIndHist(dossiers = dossier)
 
   #Chargement des chroniques de previsions
-  cdcPrev <- LoadPrev(dossier)
+  cdcPrev <- LoadPrev(dossiers = dossier)
 
   #S'il existe une entite avec la methode par historique dans le perimetre alors on charge les CdC du mois passe.
   if(any(ListeEntt$CODE_ENTITE[which(ListeEntt$METHODE == 'HISTORIQUE')] %in% Perimetre$CODE_ENTITE))
   {
     #Chargement des effacements du mois en cours de traitement et du mois precedent
-    Effacements <- mapply(SIMPLIFY = TRUE, FUN = LoadEffacements,dossier = paste(DIR_DATA,"/",format(seq.Date(from = as.Date(paste(mois,"01"),"%Y%m %d"),by = "-1 month",length.out = 2),"%Y%m"),sep=''))
+    Effacements <- mapply(SIMPLIFY = TRUE, FUN = LoadEffacements,dossiers = paste(DIR_DATA,"/",format(seq.Date(from = as.Date(paste(mois,"01"),"%Y%m %d"),by = "-1 month",length.out = 2),"%Y%m"),sep=''))
     #Pas d'historique du mois passes
     if(typeof(Effacements[[2]])!="character"){
 

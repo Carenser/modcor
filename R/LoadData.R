@@ -9,28 +9,28 @@
 #' @import lubridate
 #' @examples
 LoadPerimetre<-function(fichiers = NULL, dossiers){
-
+  
   if(is.null(fichiers))
   {
     fichiers = list.files(full.names = TRUE, path = dossiers,pattern =  "^(MA|NEBEF)_REFST_TLRLV_GRD_[0-9]{6}_[0-9A-Z]{16}_[0-9]{14}.csv$")
-
+    
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^(MA|NEBEF)_REFST_TLRLV_GRD_[0-9]{6}_[0-9A-Z]{16}_[0-9]{14}.csv$")))
   {
     stop("aucun fichier de périmètre conforme à la nomenclature prévue dans les règles SI MA ou NEBEF")
-
+    
   }else{
-
+    
     stringr::str_match(string = fichiers, pattern =  "^(MA|NEBEF)_REFST_TLRLV_GRD_([0-9]{6})_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
       dplyr::as_tibble() %>%
       dplyr::transmute(
@@ -117,41 +117,28 @@ LoadPerimetre<-function(fichiers = NULL, dossiers){
 #' @examples
 LoadEffacements <- function(dossiers, fichiers = NULL)
 {
-
-  # dmo<-oa2[!duplicated(oa2[,c("CODE_EDA","HORODATE")]),c("CODE_EDA","HORODATE","DMO")]#on conserve le DMO du premier ordre
-  # oa3<-aggregate(PUISSANCE~CODE_EDA+HORODATE,oa2,sum)
-  # oa4<-merge(oa3,dmo,by=c("CODE_EDA","HORODATE"))
-  # names(oa4)[names(oa4)=="CODE_EDA"]<-"CODE_ENTITE"
-  # oa4<-oa4[order(oa4$CODE_ENTITE,oa4$HORODATE,oa4$PUISSANCE),]
-  # avant<-rbind(c(NA,NA),oa4[-nrow(oa4),c("CODE_ENTITE","PUISSANCE")])
-  # apres<-rbind(oa4[-1,c("CODE_ENTITE","PUISSANCE")],c(NA,NA))
-  # oa5<-cbind(oa4[,c("HORODATE","CODE_ENTITE","PUISSANCE","DMO")],avant,apres)
-  # names(oa5)[5:8]<-c("CODE_ENTITE_avant","PUISSANCE_avant","CODE_ENTITE_apres","PUISSANCE_apres")
-  # debut<-oa5[oa5$PUISSANCE>0 & (oa5$PUISSANCE_avant==0 | oa5$CODE_ENTITE!=oa5$CODE_ENTITE_avant | 1:nrow(oa5)==1),]
-  # fin<-oa5[oa5$PUISSANCE>0 & (oa5$PUISSANCE_apres==0 | oa5$CODE_ENTITE!=oa5$CODE_ENTITE_apres | 1:nrow(oa5)==nrow(oa5)),]
-  # oa<-data.frame(CODE_ENTITE=debut$CODE_ENTITE,debut=debut$HORODATE,fin=fin$HORODATE+60,DMO=debut$DMO,SIGNE=sign(debut$PUISSANCE))
-
   if(is.null(fichiers))
   {
     fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")
-
+    
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")))
   {
-    stop("aucun fichier d'activation conforme à la nomenclature prévue dans les règles SI MA ou NEBEF")
-
+    warning("aucun fichier d'activation conforme à la nomenclature prévue dans les règles SI MA ou NEBEF")
+    return(tibble(MECANISME = character(), CODE_ENTITE = character(), DEBUT = as_datetime(integer()), FIN = as_datetime(integer()), SIGNE = integer(), DMO = dminutes(integer())))
+    
   }else{
-
+    
     stringr::str_match(string =  fichiers, pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
       dplyr::as_tibble() %>%
       dplyr::transmute(
@@ -172,9 +159,9 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
             , z = .$date_validite
           )
           , .f = function(x,y,z){
-
+            
             if(stringr::str_detect(string = x, pattern = "OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")){ # Traitement des fichiers MA
-
+              
               readr::read_delim(
                 file = x
                 , delim = ';'
@@ -199,22 +186,32 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
                   , DMO
                   , PUISSANCE = PUISSANCE * SIGNE #On affecte un signe aux puissances activés temporairement avant consolidation des OA
                 ) %>% #On renomme la table avec des noms communs aux différents mécanismes
-                tibble::add_column(MECANISME = y,.before = 1) %>% #On ajoute la colonne mécanisme
-                dplyr::group_by(MECANISME, CODE_ENTITE, DEBUT, FIN) %>% #On regroupe les OA par entité, début et fin
+                dplyr::group_by(CODE_ENTITE, DEBUT, FIN) %>% #On regroupe les OA par entité, début et fin
                 dplyr::summarise( #On consolide les OA portant exactement sur la même période
                   SIGNE = sign(sum(PUISSANCE))
                   , DMO = max(DMO)
-                  #, PUISSANCE = abs(sum(PUISSANCE))
+                  , PUISSANCE = abs(sum(PUISSANCE))
                 ) %>%
                 dplyr::ungroup() %>%
-                dplyr::filter(SIGNE !=0) #On supprime les OA désactivés par contrepassation
-
+                dplyr::filter(SIGNE !=0) %>% #On supprime les OA désactivés par contrepassation
+                {prog2chron(tbl_prog = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_begin = 'DEBUT', char_end = 'FIN', char_oml = 'DMO', int_step = 300)} %>% #On transpose les programmes en chroniques pour consolider les ordres chevauchants
+                {chron2prog(tbl_ts = ., char_group = 'group', char_pow = 'pow', char_datetime = 'datetime_UTC', char_oml = 'oml', int_step = 300)} %>% #On transpose les chroniques en programme
+                dplyr::rename(CODE_ENTITE = group , DEBUT = begin, FIN = end, SIGNE = sign, DMO = oml) %>%
+                dplyr::arrange(CODE_ENTITE, DEBUT) %>% # On rallonge le DMO en cas d'ordre d'ajustements successifs à moins de 30 minutes intervalle
+                dplyr::mutate(
+                  DMO = if_else(
+                    condition = lag(CODE_ENTITE) == CODE_ENTITE & (DEBUT - lubridate::dminutes(DMO) - lag(FIN)) < lubridate::dminutes(30)
+                    , true = as.numeric(as.duration(DEBUT - lag(DEBUT) + lubridate::dminutes(lag(DMO))),'minutes')
+                    , false = as.numeric(DMO)
+                    , missing = as.numeric(DMO)
+                  )
+                ) %>%
+                tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
+              
             }else{
-
+              
               if(stringr::str_detect(string = x, pattern = "PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$"))
               { # Traitement des fichiers NEBEF
-
-
                 suppressWarnings( # Warning lié au format : ajout d'une colonne vide en fin de ligne
                   readr::read_delim(
                     file = x
@@ -239,10 +236,10 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
                   dplyr::mutate(MINUTE = 60 * 24 * MINUTE/NB_PTS_CHRONIQUE) %>% #On convertit la valeur de VAL en minute
                   dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
                   dplyr::transmute(CODE_ENTITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On convertit la puissance en kWh, on crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
-                  {chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC', int_step = 1800)} %>% #On transpose les chroniques en programme
-                  dplyr::rename(CODE_ENTITE = group, DEBUT = begin, FIN = end, SIGNE = sign) %>%
+                  tibble::add_column(DMO = NA_integer_) %>%
+                  {chron2prog(tbl_ts = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_datetime = 'HORODATE_UTC',char_oml = 'DMO', int_step = 1800)} %>% #On transpose les chroniques en programme
+                  dplyr::rename(CODE_ENTITE = group, DEBUT = begin, FIN = end, SIGNE = sign, DMO = oml) %>%
                   tibble::add_column(MECANISME = y,.before = 1) %>%
-                  tibble::add_column(DMO = NA) %>%
                   dplyr::mutate(DEBUT = lubridate::with_tz(DEBUT,tzone = 'CET'), FIN = lubridate::with_tz(FIN,tzone = 'CET'))
               }
             }
@@ -264,20 +261,20 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
 #' @import lubridate
 #' @examples
 LoadCdC<-function(fichiers, dossiers = NULL){
-
+  
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv$|^NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv$")))
   {
     stop('aucun fichier de CdC conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
-
+    
   }else{
-
+    
     stringr::str_match(string =  fichiers, pattern = "^CRMA_[0-9]{4}_([0-9]{8}_[0-9]{6})_([0-9]{8}).csv$|^NEBEF_CRS_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
       dplyr::as_tibble() %>%
       dplyr::transmute(
@@ -298,9 +295,9 @@ LoadCdC<-function(fichiers, dossiers = NULL){
             , z = .$horodate_creation
           )
           , .f = function(x,y,z){
-
+            
             if(stringr::str_detect(string = x, pattern = "CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv")){ # Traitement des fichiers MA
-
+              
               readr::read_delim(
                 file = x
                 , delim = ';'
@@ -324,11 +321,11 @@ LoadCdC<-function(fichiers, dossiers = NULL){
                 dplyr::mutate(HORODATE = lubridate::force_tz(as_datetime(x = DATE), tzone = 'CET') + lubridate::dminutes(MINUTE)) %>% #On crée une colonne horodate
                 dplyr::transmute(CODE_ENTITE, CODE_SITE, HORODATE,  HORODATE_UTC = lubridate::with_tz(HORODATE,tzone = 'UTC'), PUISSANCE) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
                 tibble::add_column(HORODATE_CREATION = z, MECANISME = y,.before = 1)
-
+              
             }else{
-
+              
               if(stringr::str_detect(string = x, pattern = "NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv")){ # Traitement des fichiers NEBEF
-
+                
                 readr::read_delim(
                   file = x
                   , delim = ';'
@@ -377,7 +374,7 @@ LoadCdC<-function(fichiers, dossiers = NULL){
 #' @import lubridate
 #' @examples
 LoadPrev<-function(dossiers, fichiers = NULL, pas = 600){
-
+  
   # if(dir.exists(dossier))
   # {
   #   #Fichiers de programme d'Effacement Retenus
@@ -481,28 +478,29 @@ LoadPrev<-function(dossiers, fichiers = NULL, pas = 600){
   #   logprint(paste("Dossier",dossier,"introuvable !"))
   #
   # }
-
+  
   if(is.null(fichiers))
   {
     fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")
-
+    
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")))
   {
     warning('aucun fichier de courbe de prévision conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
-
+    return(tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE_UTC = as_datetime(integer()),HORODATE = as_datetime(integer()), PUISSANCE = double(), PAS = integer()))
+    
   }else{
-
+    
     stringr::str_match(string =  fichiers, pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$") %>%
       dplyr::as_tibble() %>%
       dplyr::transmute(
@@ -523,9 +521,9 @@ LoadPrev<-function(dossiers, fichiers = NULL, pas = 600){
             , z = .$horodate_creation
           )
           , .f = function(x,y,z){
-
+            
             if(y == 'MA'){
-
+              
               readr::read_delim(
                 file = x
                 , delim = ';'
@@ -561,11 +559,11 @@ LoadPrev<-function(dossiers, fichiers = NULL, pas = 600){
                   ))
                 ) %>% #On crée une colonne horodate_UTC en conservant les autres colonnes nécessaires
                 tibble::add_column(HORODATE_CREATION = z, MECANISME = y,.before = 1)
-
+              
             }else{
-
+              
               if(y=='NEBEF'){
-
+                
                 readr::read_delim(
                   file = x
                   , delim = ';'
@@ -624,28 +622,29 @@ LoadPrev<-function(dossiers, fichiers = NULL, pas = 600){
 #' @import lubridate
 #' @examples
 LoadListeEntt<-function(dossiers, fichiers = NULL){
-
+  
   if(is.null(fichiers))
   {
     fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$|^LISTE_EDE_GRD_([0-9]{14}).csv$")
-
+    
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$|^LISTE_EDE_GRD_([0-9]{14}).csv$")))
   {
     warning("Aucun fichier de listing des entités conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.")
-
+    return(tibble(MECANISME=character(),CODE_ENTITE=character(),METHODE=character(),DEBUT=as_date(integer()),FIN=as_date(integer()),VARIANTE=character()))
+    
   }else{
-
+    
     stringr::str_match(string =  fichiers, pattern = "^LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$|^LISTE_EDE_GRD_([0-9]{14}).csv$") %>%
       dplyr::as_tibble() %>%
       dplyr::transmute(
@@ -667,9 +666,9 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
             , z = .$date_validite
           )
           , .f = function(x,y,z){
-
+            
             if(stringr::str_detect(string = x, pattern = "LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$")){ # Traitement des fichiers MA
-
+              
               readr::read_delim(
                 file = x
                 , delim = ';'
@@ -690,12 +689,12 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
                   , FIN = rollback(as_date(z),roll_to_first = T) + lubridate::days_in_month(as_date(z)) # date de fin exclue en sortie
                 ) %>% #On renomme la table avec des noms communs aux différents mécanismes
                 tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
-
+              
             }else{
-
+              
               if(stringr::str_detect(string = x, pattern = "LISTE_EDE_GRD_([0-9]{14}).csv$"))
               { # Traitement des fichiers NEBEF
-
+                
                 readr::read_delim(
                   file = x
                   , delim = ';'
@@ -737,29 +736,29 @@ LoadListeEntt<-function(dossiers, fichiers = NULL){
 #' @import lubridate
 #' @examples
 LoadSitesHomol<-function(dossiers,fichiers = NULL){
-
+  
   if(is.null(fichiers))
   {
     fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")
-
+    
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-
+  
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")))
   {
     warning("Aucun fichier d'homologation des sites conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.")
     return(tibble(MECANISME=character(),CODE_SITE=character(),METHODE=character(),DEBUT=as_date(integer()),FIN=as_date(integer()),VARIANTE=character()))
-
+    
   }else{
-
+    
     stringr::str_match(string =  fichiers, pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$") %>%
       dplyr::as_tibble() %>%
       dplyr::transmute(
@@ -770,7 +769,7 @@ LoadSitesHomol<-function(dossiers,fichiers = NULL){
       ) %>%
       dplyr::filter(str_detect(string = fichier, pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")) %>% # On ne conserve que les fichiers de listing des entités
       dplyr::arrange(mecanisme, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité version (declaratif/final) et horodate de création
-      dplyr::distinct(mecanisme, date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée (pour NEBEF on ne conserve que le dernier fichier créé)
+      dplyr::distinct(mecanisme,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée (pour NEBEF on ne conserve que le dernier fichier créé)
       {
         purrr::pmap_dfr(
           .l = list(
@@ -796,27 +795,27 @@ LoadSitesHomol<-function(dossiers,fichiers = NULL){
                   )
                 , skip = 2
               )) %>%
-            #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
-            {
-              bind_rows(
-                dplyr::transmute(.data = .
-                                 , CODE_SITE = CODE_EXT_SITE
-                                 , DEBUT = DATE_DEBUT_HOMOL_PREV
-                                 , FIN = coalesce(DATE_FIN_HOMOL_PREV,as_date('2099-12-31')) # date de fin exclue en sortie
-                ) %>%
-                  dplyr::filter(!is.na(DEBUT)) %>%
-                  add_column(METHODE = 'PREVISION',.before = 2) %>%
-                  add_column(VARIANTE = NA)
-                , dplyr::transmute(.data = .
+              #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+              {
+                bind_rows(
+                  dplyr::transmute(.data = .
                                    , CODE_SITE = CODE_EXT_SITE
-                                   , DEBUT = DATE_DEBUT_HOMOL_HIST
-                                   , FIN = coalesce(DATE_FIN_HOMOL_HIST,as_date('2099-12-31')) # date de fin exclue en sortie
-                                   , VARIANTE = VARIANTE_HIST
-                ) %>%
-                  dplyr::filter(!is.na(DEBUT)) %>%
-                  add_column(METHODE = 'HISTORIQUE',.before = 2)
-              )
-            } %>% #On renomme la table avec des noms communs aux différents mécanismes
+                                   , DEBUT = DATE_DEBUT_HOMOL_PREV
+                                   , FIN = coalesce(DATE_FIN_HOMOL_PREV,as_date('2099-12-31')) # date de fin exclue en sortie
+                  ) %>%
+                    dplyr::filter(!is.na(DEBUT)) %>%
+                    add_column(METHODE = 'PREVISION',.before = 2) %>%
+                    add_column(VARIANTE = NA)
+                  , dplyr::transmute(.data = .
+                                     , CODE_SITE = CODE_EXT_SITE
+                                     , DEBUT = DATE_DEBUT_HOMOL_HIST
+                                     , FIN = coalesce(DATE_FIN_HOMOL_HIST,as_date('2099-12-31')) # date de fin exclue en sortie
+                                     , VARIANTE = VARIANTE_HIST
+                  ) %>%
+                    dplyr::filter(!is.na(DEBUT)) %>%
+                    add_column(METHODE = 'HISTORIQUE',.before = 2)
+                )
+              } %>% #On renomme la table avec des noms communs aux différents mécanismes
               tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
           }
         )
@@ -824,30 +823,88 @@ LoadSitesHomol<-function(dossiers,fichiers = NULL){
   }
 }
 
-LoadIndHist<-function(dirs=""){#on charge le dernier fichier Indispo connu
-  lf<-list.files(dossier,pattern="NEBEF_INDHIST_GRD_")
-  lf<-lf[regexpr(".csv",lf)>0]
-  if(length(lf)>0){
-    IndHist1<-list()
-    for(f in lf){
-      IndHist1[[which(lf==f)]]<-read.csv2(paste(dossier,f,sep="/"),skip=2, stringsAsFactors = FALSE)[,c("CODE_EXT_SITE","DATE_INDISPO")]
-    }
-    IndHist<-do.call("rbind",IndHist1)
-  }else{
-    logprint("Pas de fichier 'Indispos'")
-    IndHist<-data.frame(CODE_EXT_SITE=NA,DATE_INDISPO=NA)[0,]
+#' Chargement des fichiers des journées d'indisponibilité par entité et site soumis à la méthodes historique aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
+#'
+#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param fichiers un vecteur contenant les noms des fichiers des journées d'indisponibilité (facultatif)
+#'
+#' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, DATE
+#' @export
+#' @import tidyverse
+#' @import lubridate
+#' @examples
+LoadIndHist<-function(dossiers, fichiers = NULL){#on charge le dernier fichier Indispo connu
+  
+  if(is.null(fichiers))
+  {
+    fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^(MA|NEBEF)_INDHIST_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")
+    
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
-  names(IndHist)[names(IndHist)=="CODE_EXT_SITE"]<-"CODE_SITE"
-  IndHist$DATE_INDISPO<-format(as.Date(as.character(IndHist$DATE_INDISPO),format="%Y%m%d"),format="%Y-%m-%d")
-  return(unique(IndHist))
+  
+  if(is.null(dossiers))
+  {
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
+  
+  #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
+  if(!any(stringr::str_detect(string = fichiers,pattern = "^(MA|NEBEF)_INDHIST_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")))
+  {
+    warning("Aucun fichier d'indisponibilité de site conforme à la nomenclature prévue dans les règles SI MA ou NEBEF.")
+    return(tibble(MECANISME=character(),CODE_ENTITE=character(),CODE_SITE=character(),DATE=as_date(integer())))
+    
+  }else{
+    
+    stringr::str_match(string =  fichiers, pattern = "^(MA|NEBEF)_INDHIST_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$") %>%
+      dplyr::as_tibble() %>%
+      dplyr::transmute(
+        dossier = dossiers
+        , fichier = V1
+        , mecanisme = V2
+        , date_validite = lubridate::as_date(V3)
+        , horodate_creation = lubridate::ymd_hms(V4,tz = "CET")
+      ) %>%
+      dplyr::filter(str_detect(string = fichier, pattern =  "^(MA|NEBEF)_INDHIST_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")) %>% # On ne conserve que les fichiers d'indisponibilité
+      dplyr::arrange(mecanisme, date_validite, desc(horodate_creation)) %>% # On trie les fichiers par mécanisme, période de validité et horodate de création
+      dplyr::distinct(mecanisme,date_validite,.keep_all = TRUE) %>% # On ne conserve que le dernier fichier reçu pour une période donnée (pour NEBEF on ne conserve que le dernier fichier créé)
+      {
+        purrr::pmap_dfr(
+          .l = list(
+            x = str_c(.$dossier,.$fichier,sep='')
+            , y = .$mecanisme
+          )
+          , .f = function(x,y){
+            suppressWarnings(
+              readr::read_delim(
+                file = x
+                , delim = ';'
+                , locale = locale(decimal_mark = ',',date_format = '%Y%m%d')
+                , comment = '<EOF>'
+                , col_names = c('CODE_ENTITE','CODE_SITE','DATE')
+                , col_types =
+                  list(
+                    CODE_ENTITE = 'c'
+                    , CODE_SITE = 'c'
+                    , DATE = 'D'
+                    , .default = 'c'
+                  )
+                , skip = 3
+              )) %>% #On importe le fichier en précisant le séparateur de colonnes, le format des valeurs décimales, le format des colonnes et les lignes à passer en commentaires
+              tibble::add_column(MECANISME = y,.before = 1) #On renomme la table avec des noms communs aux différents mécanismes en ajoutant la colonne mécanisme
+          }
+        )
+      }
+  }
 }
 
 LoadPEIF<-function(dossier=""){}
 
 logprint<-function(logText, logFileName = NULL){
-
+  
   if(is.null(logFileName))
     logFileName = paste0(getwd(), '/Exec-', format(Sys.time(), '%Y%m%d%H%M%S'),'.log')
-
+  
   write.table(logText, logFileName, append = TRUE, row.names = FALSE, col.names = FALSE, quote = FALSE)
 }
