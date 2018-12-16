@@ -2,6 +2,8 @@ library(tidyverse)
 library(lubridate)
 library(fuzzyjoin)
 
+options(warning.length = 5000L, tibble.print_max = Inf)
+
 map(.x = list.files(path = paste0(getwd(),'/R'), pattern = '[^Main.R]',full.names = TRUE),.f = function(x){source(file = x, prompt.echo = FALSE, verbose = FALSE, print.eval = FALSE, echo = FALSE)})
 
 # Chargement des données  -------------------------------------------------
@@ -27,7 +29,7 @@ list_data = fuzzy_left_join(
   , y = tbl_entt
   , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
   , match_fun = list(`==`,`==`,`>=`,`<`)
-) %>% 
+) %>%
   #(méthode du rectangle par défaut).
   replace_na(list(METHODE = 'RECTANGLE')) %>%
   transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO) %>%
@@ -59,7 +61,7 @@ list_data = fuzzy_left_join(
     , DMO
   ) %>%
   distinct() %>% #sites homologués à d'autres méthodes que le rectangle
-  split(list(.$MECANISME, .$CODE_SITE, .$METHODE), drop = TRUE) 
+  split(list(.$MECANISME, .$CODE_SITE, .$METHODE), drop = TRUE)
 
 prog = list_data[grep(names(list_data),pattern = 'NEBEF.PRM30000520044831.PREVISION',value = T)][[1]]
 #prog = test[grep(names(test),pattern = '(MA|NEBEF).PRM[0-9]{14}.[^RECTANGLE]',value = T)][[1]][1:4,]
@@ -77,68 +79,22 @@ call(
   # On récupère les prévision de CdC par site soumis à la méthode par PREVISION
   , prev = dplyr::filter(
     tbl_prev
-    , MECANISME == unique(tbl_prog[['MECANISME']]) &
-      CODE_ENTITE == unique(tbl_prog[['CODE_ENTITE']]) &
-      CODE_SITE == unique(tbl_prog[['CODE_SITE']]) &
-      HORODATE %within% interval(start = tbl_prog[['DEBUT']],end = tbl_prog[['FIN']],tzone = 'CET')
+    , MECANISME == unique(prog[['MECANISME']]) &
+      CODE_ENTITE == unique(prog[['CODE_ENTITE']]) &
+      CODE_SITE == unique(prog[['CODE_SITE']]) &
+      HORODATE %within% as.list(prog[['DEBUT']] %--% prog[['FIN']])
   )
 ) %>%
   eval() %>% View()
 
-
-test2 = 
-  test = fuzzy_left_join(
-    x = mutate(tbl_eff, DATE = as_date(DEBUT,tz='CET'))
-    , y = tbl_entt
-    , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-    , match_fun = list(`==`,`==`,`>=`,`<`)
-  ) %>% 
-  #(méthode du rectangle par défaut).
-  replace_na(list(METHODE = 'RECTANGLE')) %>%
-  transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO) %>%
-  fuzzy_left_join(
-    y = tbl_sites
-    , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-    , match_fun = list(`==`,`==`,`>=`,`<`)
-    #ajout des sites rattachés aux entités
-  ) %>%
-  transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT) %>%
-  fuzzy_left_join(
-    y = tbl_homol
-    , by = c('MECANISME','CODE_SITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-    , match_fun = list(`==`,`==`,`>=`,`<`)
-  ) %>% # Un site ne peut être rattaché à une entité certifiée par des méthodes autres que RECTANGLE que s'il est homologué à ces méthodes
-  dplyr::filter(!(METHODE.x != 'RECTANGLE' & METHODE.y != METHODE.x)) %>%
-  transmute(
-    MECANISME = MECANISME.x
-    , CODE_ENTITE
-    , CODE_SITE = CODE_SITE.x
-    , CAPA_MAX_H_SITE
-    , TYPE_CONTRAT
-    , METHODE = METHODE.x
-    #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (utile ?)
-    , VARIANTE = if_else(condition = METHODE.x == 'HISTORIQUE' & is.na(VARIANTE), true = 'MOY10J', false =  VARIANTE)
-    , DEBUT = DEBUT.x
-    , FIN = FIN.x
-    , SIGNE
-    , DMO
-  ) %>%
-  {dplyr::semi_join(
-    # On récupère au plus 60 jours d'historique de CdC par site soumis à la méthode HISTORIQUE (à optimiser?)
-    x =  mutate(., DATE = as_date(DEBUT,tz='CET'))
-    , y = mutate(tbl_cdc, DATE = as_date(HORODATE, tz = 'CET'))
-    , by = c('MECANISME','CODE_ENTITE','CODE_SITE', 'DATE')
-  )} %>%
-  distinct() %>% #sites homologués à d'autres méthodes que le rectangle
-  split(list(.$MECANISME, .$CODE_SITE, .$METHODE), drop = TRUE)
-
-test_results2 = 
+test_results2 =
   list_data[grep(names(list_data),pattern = 'NEBEF.PRM30000520044831.PREVISION',value = T)] %>%
   {
     purrr::map_dfr(
       .x = .
       , tbl_ts = tbl_cdc
-      , .f = function(tbl_prog, tbl_ts)
+      , tbl_prev = tbl_prev
+      , .f = function(tbl_prog, tbl_ts, tbl_prev)
       {
         call(
           name = paste('CR', unique(tbl_prog[['METHODE']]), sep = '_') #application de la méthode de contrôle du réalisé de l'entité
@@ -156,7 +112,7 @@ test_results2 =
             , MECANISME == tbl_prog[['MECANISME']] &
               CODE_ENTITE == tbl_prog[['CODE_ENTITE']] &
               CODE_SITE == tbl_prog[['CODE_SITE']] &
-              any(HORODATE_UTC %within% (tbl_prog[['DEBUT']] %--% tbl_prog[['FIN']]))
+              HORODATE_UTC %within% as.list(prog[['DEBUT']] %--% prog[['FIN']])
           )
         ) %>%
           eval()
@@ -167,8 +123,8 @@ test_results2 =
 # AUTRES ------------------------------------------------------------------
 
 
-test_semi_perim = 
-  
+test_semi_perim =
+
   test_perim %>% split(.$CODE_ENTITE) %>%
   {
     pmap_df(
@@ -181,7 +137,7 @@ test_semi_perim =
   }
 
 (
-  x = 
+  x =
     , y = test_entt
   , by = c('DEBUT','FIN','CODE_ENTITE')
   , by = c('DEBUT','FIN')
