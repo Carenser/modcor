@@ -19,7 +19,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
   if(nrow(tbl_eff)==0){
     stop('Aucun effacement')
   }
-  
+
   #récupération de la méthode de certification associée à un effacement
   test = fuzzy_left_join(
     x = mutate(tbl_eff, DATE = as_date(DEBUT,tz='CET'))
@@ -27,22 +27,22 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
     , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
     , match_fun = list(`==`,`==`,`>=`,`<`)
   ) %>%
-  #(méthode du rectangle par défaut).
+    #application de la méthode du rectangle par défaut
     replace_na(list(METHODE = 'RECTANGLE')) %>%
     transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO) %>%
+    #ajout des sites rattachés aux entités
     fuzzy_left_join(
       y = tbl_sites
       , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
       , match_fun = list(`==`,`==`,`>=`,`<`)
-      #ajout des sites rattachés aux entités
     ) %>%
     transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT) %>%
+    # Un site ne peut être rattaché à une entité certifiée par des méthodes autres que RECTANGLE que s'il est homologué à ces méthodes
     fuzzy_left_join(
       y = tbl_homol
       , by = c('MECANISME','CODE_SITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
       , match_fun = list(`==`,`==`,`>=`,`<`)
-    ) %>% 
-    # Un site ne peut être rattaché à une entité certifiée par des méthodes autres que RECTANGLE que s'il est homologué à ces méthodes
+    ) %>%
     dplyr::filter(!(METHODE.x != 'RECTANGLE' & METHODE.y != METHODE.x)) %>%
     transmute(
       MECANISME = MECANISME.x
@@ -51,7 +51,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
       , CAPA_MAX_H_SITE
       , TYPE_CONTRAT
       , METHODE = METHODE.x
-      #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (le plus répendu utile ?)
+      #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (le plus répandue utile ?)
       , VARIANTE = if_else(condition = METHODE.x == 'HISTORIQUE' & is.na(VARIANTE), true = 'MOY10J', false =  VARIANTE)
       , DEBUT = DEBUT.x
       , FIN = FIN.x
@@ -68,20 +68,48 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
     transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x,CODE_SITE = CODE_SITE.x, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO, DATE_INDHIST = DATE) %>%
     group_by(MECANISME, CODE_ENTITE, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO) %>%
     nest() %>%
-    #extension des périodes d'effacement pour disposer des cdc nécessaires au calcul de la cdc de référence
+    #identification des journées utilisées pour l'historique
     mutate(
-      DEBUT_ETENDU = case_when(
-        MECANISME == 'MA' & METHODE == 'RECTANGLE' ~ lubridate::floor_date(DEBUT - DMO - dminutes(30), unit = '30 minutes') #arrondir au pas 30 minute précédent
-        , MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' ~ DEBUT - min(as.duration(FIN - DEBUT), dhours(2)) #arrondir au pas 30 minute précédent
-        , METHODE == 'PREVISION' ~ DEBUT
-        , METHODE == 'HISTORIQUE' & VARIANTE %in% c('MOY10J','MED10J') ~ DEBUT - ddays(10 +  map_int(data, ~sum(.x$DATE_INDHIST < DEBUT & .x$DATE_INDHIST >= (DEBUT - ddays(10))))) # A optimiser avec une fonction comparant les jours indisp avec les journées de réf
-        , METHODE == 'HISTORIQUE' & VARIANTE %in% c('MOY4S','MED4S') ~ DEBUT - dweeks(4 + map_int(data, ~sum(.x$DATE_INDHIST < DEBUT & wday(.x$DATE_INDHIST) == wday(DEBUT)))) # A optimiser avec une fonction comparant les jours indisp avec les journées de réf
-      )
-      , FIN_ETENDU = case_when(
-        MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' ~ FIN + min(as.duration(FIN - DEBUT), dhours(2))
-        , TRUE ~ FIN
+      data = pmap(
+        .l = list(x = data, y = as_date(DEBUT,tz = 'CET'), z = METHODE, t = VARIANTE)
+        , .f = function(x,y,z,t)
+        {
+          tibble(
+            DATE_HIST = as_date(
+              unlist(
+                case_when(
+                  z == 'HISTORIQUE' & t %in% c('MOY4S','MED4S') ~ list(setdiff(x = seq.Date(from = as_date(y) - weeks(1), length.out = 52, by = '-1 week'), y = x$DATE_INDHIST)[1:4])
+                  , z == 'HISTORIQUE' & t %in% c('MOY10J','MED10J') ~ list(setdiff(x = seq.Date(from = as_date(y) - days(1), length.out = 365, by = '-1 day'), y = x$DATE_INDHIST)[1:10])
+                  , TRUE ~ list(as_date(NA))
+                )
+              )
+            )
+          )
+        }
       )
     ) %>%
+    #identification des périodes de référence
+    mutate(
+      data = pmap(
+        .l = list(x = data, y = DEBUT, z = FIN, t = MECANISME, u = METHODE, v = DMO)
+        , .f = function(x,y,z,t,u,v)
+        {
+          tibble(
+            PERIODE_REFERENCE = unlist(
+              case_when(
+                t == 'MA' & u == 'RECTANGLE' ~ list(lubridate::floor_date(y - v - dminutes(30), unit = '30 minutes')%--%(y - v)) #arrondir au pas 30 minute précédent
+                , t == 'NEBEF' & u == 'RECTANGLE' ~ list((y - min(as.duration(z - y), dhours(2)))%--%y,z%--%(z + min(as.duration(z - y), dhours(2)))) #arrondir au pas 30 minute précédent
+                , u == 'PREVISION' ~ list(y%--%z)
+                , u == 'HISTORIQUE' ~ list((as_date(x$DATE_HIST) + dhours(hour(y)) + dminutes(minute(y)))%--%(as_date(x$DATE_HIST) + dhours(hour(z)) + dminutes(minute(z))))
+                , TRUE ~ list(as.interval(NA))
+              )
+            )
+          )
+        }
+      )
+    )
+
+  %>%
     dplyr::filter(METHODE =='RECTANGLE' & MECANISME == 'MA') %>% # A SUPPRIMER
     split(list(.$MECANISME, .$CODE_ENTITE, .$CODE_SITE, .$METHODE, .$DEBUT, .$FIN), drop = TRUE) %>%
     head(n=100) %>%
@@ -124,7 +152,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 )
                 , collapse = '\n')
             )
-            
+
             return(NULL)
 
           }else{
