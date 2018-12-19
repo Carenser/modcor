@@ -20,7 +20,7 @@ tbl_entt = LoadListeEntt(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
 tbl_homol = LoadSitesHomol(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
-tbl_indhist = LoadIndHist(dossiers  =  paste0(getwd(),'/data-raw/201802'))
+tbl_indhist = LoadIndHist(dossiers  =  paste0(getwd(),'/data-raw/', c('201801','201802')))
 
 tbl_prev = LoadPrev(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
