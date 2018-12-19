@@ -197,7 +197,7 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
                 {prog2chron(tbl_prog = ., char_group = 'CODE_ENTITE', char_pow = 'PUISSANCE', char_begin = 'DEBUT', char_end = 'FIN', char_oml = 'DMO', int_step = 300)} %>% #On transpose les programmes en chroniques pour consolider les ordres chevauchants
                 {chron2prog(tbl_ts = ., char_group = 'group', char_pow = 'pow', char_datetime = 'datetime_UTC', char_oml = 'oml', int_step = 300)} %>% #On transpose les chroniques en programme
                 dplyr::rename(CODE_ENTITE = group , DEBUT = begin, FIN = end, SIGNE = sign, DMO = oml) %>%
-                dplyr::arrange(CODE_ENTITE, DEBUT) %>% # On rallonge le DMO en cas d'ordre d'ajustements successifs à moins de 30 minutes intervalle
+                dplyr::arrange(CODE_ENTITE, DEBUT) %>% # On rallonge le DMO en cas d'ordre d'ajustements successifs à moins de 30 minutes d'intervalle
                 dplyr::mutate(
                   DMO = if_else(
                     condition = lag(CODE_ENTITE) == CODE_ENTITE & (DEBUT - lubridate::dminutes(DMO) - lag(FIN)) < lubridate::dminutes(30)
@@ -206,8 +206,9 @@ LoadEffacements <- function(dossiers, fichiers = NULL)
                     , missing = as.numeric(DMO)
                   )
                 ) %>%
-                tibble::add_column(MECANISME = y,.before = 1) #On ajoute la colonne mécanisme
-
+                tibble::add_column(MECANISME = y,.before = 1) %>% #On ajoute la colonne mécanisme
+                dplyr::mutate(DEBUT = lubridate::with_tz(DEBUT,tzone = 'CET'), FIN = lubridate::with_tz(FIN,tzone = 'CET'))
+              
             }else{
 
               if(stringr::str_detect(string = x, pattern = "PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$"))

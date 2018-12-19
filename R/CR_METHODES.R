@@ -69,7 +69,7 @@ CR_PREVISION <- function(tbl_eff, tbl_cdc, tbl_prev, int_step){
   tbl_cdcref =
     dplyr::left_join(
       x = tbl_cdc
-      , y =  dplyr::rename(tbl_prev,REFERENCE = PUISSANCE)
+      , y =  dplyr::rename(mutate(tbl_prev, HORODATE_UTC = if_else(condition = PAS > int_step, true = as_datetime(int_step*as.numeric(HORODATE_UTC)%/%int_step,tz = 'UTC'), false = HORODATE_UTC)), REFERENCE = PUISSANCE)
       , by = c('MECANISME','CODE_ENTITE','CODE_SITE','HORODATE','HORODATE_UTC')
     ) %>%
     fuzzyjoin::fuzzy_right_join(
@@ -129,42 +129,70 @@ CR_PREVISION <- function(tbl_eff, tbl_cdc, tbl_prev, int_step){
 #' @import tidyverse
 #' @import fuzzyjoin
 #' @examples
-CR_RECTANGLE<-function(cdc,eff){
+CR_RECTANGLE<-function(tbl_eff, tbl_cdc){
   
-  if(nrow(cdc)==0)
+  if(nrow(tbl_cdc)==0)
   {
-    warning(paste('courbe de charge manquante pour le site',unique(cdc$CODE_SITE), 'sur la période du', range(eff$DEBUT)[1], 'au', range(eff$FIN)[2]))
+    warning(paste('courbe de charge incomplète pour le site',unique(tbl_cdc$CODE_SITE), 'sur la période du', range(tbl_eff$DEBUT)[1], 'au', range(tbl_eff$FIN)[2]))
     return(tibble(MECANISME = character(), CODE_ENTITE=character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), PUISSANCE = double(), REFERENCE = double(), SIGNE = integer()))
   }
   
-  for(i in seq_len(nrow(eff)))
+  for(i in seq_len(nrow(tbl_eff)))
   {
-    if(eff$MECANISME[i] == 'MA')
+    if(tbl_eff$MECANISME[i] == 'MA')
     {
-      #if(i==1)successive<-0 else successive<-(eff$DEBUT[i]<eff$FIN[i-1]+eff$DMO[i-1]+30*60)#regle sur les activations successives d'une meme offre
-      heureFINPref <- lubridate::round_date(eff$DEBUT[i]-eff$DMO[i], unit = 'minutes') #on arrondit au pas demi-horaire près
-      #if(successive==0) w<-which(cdc$HORODATE<heureFINPref & cdc$HORODATE>=heureFINPref-30*60)else print(paste("successive",paste(eff[i,],collapse="_")))
-      #if(length(w)>0)cdc$REFERENCE[cdc$HORODATE>eff$DEBUT[i]-10*60 & cdc$HORODATE<eff$FIN[i]]<-mean(cdc$PUISSANCE[w])else print(paste("Pas de reference pour ",paste(eff[i,],collapse="_")))
-      
-      cdc$REFERENCE[cdc$HORODATE>eff$DEBUT[i]-10*60 & cdc$HORODATE<eff$FIN[i]]<-mean(cdc$PUISSANCE[which(cdc$HORODATE<heureFINPref & cdc$HORODATE>=heureFINPref-30*60)])
-      
-      cdc$SIGNE[cdc$HORODATE>eff$DEBUT[i]-10*60 & cdc$HORODATE<eff$FIN[i]] = eff$SIGNE[i]
-      
+      tbl_cdc %>%
+        mutate(
+          REFERENCE = if_else(
+            condition = HORODATE %within% (tbl_eff$DEBUT[i]%--%tbl_eff$FIN[i])
+            , true = mean(subset(tbl_cdc, lubridate::floor_date(HORODATE, unit = '30 minutes') == lubridate::floor_date(tbl_eff$DEBUT[i] - tbl_eff$DMO[i] - dminutes(30), unit = '30 minutes'), PUISSANCE)[[1]])
+            , false = NA_real_
+            , missing = NA_real_
+          )
+          , SIGNE = if_else(
+            condition = HORODATE %within% (tbl_eff$DEBUT[i]%--%tbl_eff$FIN[i])
+            , true = tbl_eff$SIGNE[i]
+            , false = NA_real_
+            , missing = NA_real_
+          )
+        )
     }
     
-    if(eff$MECANISME[i] == 'NEBEF')
+    if(tbl_eff$MECANISME[i] == 'NEBEF')
     {
-      avant<-which(cdc$HORODATE<eff$DEBUT[i] & cdc$HORODATE>=as.POSIXct(as.numeric(eff$DEBUT[i])*2-as.numeric(eff$FIN[i]),origin="1970-01-01"))
-      apres<-which(cdc$HORODATE>=eff$FIN[i] & cdc$HORODATE<as.POSIXct(as.numeric(eff$FIN[i])*2-as.numeric(eff$DEBUT[i]),origin="1970-01-01"))
+      tbl_cdc %>%
+        mutate(
+          REFERENCE = if_else(
+            condition = HORODATE %within% (tbl_eff$DEBUT[i]%--%tbl_eff$FIN[i])
+            , true = 
+              #changer la période de référence
+              #prendre en compte le signe pour min ou max
+              tbl_eff$SIGNE[i] * min(
+                tbl_eff$SIGNE[i] * mean(subset(tbl_cdc, HORODATE %within% (tbl_eff$DEBUT[i] - as.duration(tbl_eff$FIN[i] - tbl_eff$DEBUT[i]))%--%tbl_eff$DEBUT[i], PUISSANCE)[[1]])
+                , tbl_eff$SIGNE[i] * mean(subset(tbl_cdc, HORODATE %within% (tbl_eff$FIN[i] + dminutes(30))%--%(tbl_eff$FIN[i] + dminutes(30) + as.duration(tbl_eff$FIN[i] - tbl_eff$DEBUT[i])), PUISSANCE)[[1]])
+              )
+            , false = NA_real_
+            , missing = NA_real_
+          )
+          , SIGNE = if_else(
+            condition = HORODATE %within% (tbl_eff$DEBUT[i]%--%tbl_eff$FIN[i])
+            , true = tbl_eff$SIGNE[i]
+            , false = NA_real_
+            , missing = NA_real_
+          )
+        )
       
-      if(length(avant)>0)Pavant<-mean(cdc$PUISSANCE[avant])else Pavant<-Inf
-      if(length(apres)>0)Papres<-mean(cdc$PUISSANCE[apres])else Papres<-Inf
+      avant<-which(tbl_cdc$HORODATE<tbl_eff$DEBUT[i] & tbl_cdc$HORODATE>=as.POSIXct(as.numeric(tbl_eff$DEBUT[i])*2-as.numeric(tbl_eff$FIN[i]),origin="1970-01-01"))
+      apres<-which(tbl_cdc$HORODATE>=tbl_eff$FIN[i] & tbl_cdc$HORODATE<as.POSIXct(as.numeric(tbl_eff$FIN[i])*2-as.numeric(tbl_eff$DEBUT[i]),origin="1970-01-01"))
       
-      cdc$REFERENCE[cdc$HORODATE>=eff$DEBUT[i] & cdc$HORODATE<eff$FIN[i]] <- ifelse(eff$SIGNE[i] < 0, max(Pavant,Papres), min(Pavant,Papres))
+      if(length(avant)>0)Pavant<-mean(tbl_cdc$PUISSANCE[avant])else Pavant<-Inf
+      if(length(apres)>0)Papres<-mean(tbl_cdc$PUISSANCE[apres])else Papres<-Inf
       
-      cdc$SIGNE[cdc$HORODATE>=eff$DEBUT[i] & cdc$HORODATE<eff$FIN[i]] = eff$SIGNE[i]
+      tbl_cdc$REFERENCE[tbl_cdc$HORODATE>=tbl_eff$DEBUT[i] & tbl_cdc$HORODATE<tbl_eff$FIN[i]] <- ifelse(tbl_eff$SIGNE[i] < 0, max(Pavant,Papres), min(Pavant,Papres))
+      
+      tbl_cdc$SIGNE[tbl_cdc$HORODATE>=tbl_eff$DEBUT[i] & tbl_cdc$HORODATE<tbl_eff$FIN[i]] = tbl_eff$SIGNE[i]
     }
   }
   
-  return(cdc)
+  return(tbl_cdc)
 }

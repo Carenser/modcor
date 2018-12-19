@@ -16,6 +16,10 @@
 #' @examples
 CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, tbl_homol, tbl_indhist, tbl_prev){
 
+  if(nrow(tbl_eff)==0){
+    stop('Aucun effacement')
+  }
+  
   #récupération de la méthode de certification associée à un effacement
   test = fuzzy_left_join(
     x = mutate(tbl_eff, DATE = as_date(DEBUT,tz='CET'))
@@ -23,7 +27,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
     , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
     , match_fun = list(`==`,`==`,`>=`,`<`)
   ) %>%
-    #(méthode du rectangle par défaut).
+  #(méthode du rectangle par défaut).
     replace_na(list(METHODE = 'RECTANGLE')) %>%
     transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO) %>%
     fuzzy_left_join(
@@ -37,7 +41,8 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
       y = tbl_homol
       , by = c('MECANISME','CODE_SITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
       , match_fun = list(`==`,`==`,`>=`,`<`)
-    ) %>% # Un site ne peut être rattaché à une entité certifiée par des méthodes autres que RECTANGLE que s'il est homologué à ces méthodes
+    ) %>% 
+    # Un site ne peut être rattaché à une entité certifiée par des méthodes autres que RECTANGLE que s'il est homologué à ces méthodes
     dplyr::filter(!(METHODE.x != 'RECTANGLE' & METHODE.y != METHODE.x)) %>%
     transmute(
       MECANISME = MECANISME.x
@@ -46,7 +51,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
       , CAPA_MAX_H_SITE
       , TYPE_CONTRAT
       , METHODE = METHODE.x
-      #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (utile ?)
+      #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (le plus répendu utile ?)
       , VARIANTE = if_else(condition = METHODE.x == 'HISTORIQUE' & is.na(VARIANTE), true = 'MOY10J', false =  VARIANTE)
       , DEBUT = DEBUT.x
       , FIN = FIN.x
@@ -66,33 +71,33 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
     #extension des périodes d'effacement pour disposer des cdc nécessaires au calcul de la cdc de référence
     mutate(
       DEBUT_ETENDU = case_when(
-        METHODE == 'RECTANGLE' ~ DEBUT - DMO #arrondir au pas 30 minute le plus proche anciennement ?
+        MECANISME == 'MA' & METHODE == 'RECTANGLE' ~ lubridate::floor_date(DEBUT - DMO - dminutes(30), unit = '30 minutes') #arrondir au pas 30 minute précédent
+        , MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' ~ DEBUT - min(as.duration(FIN - DEBUT), dhours(2)) #arrondir au pas 30 minute précédent
         , METHODE == 'PREVISION' ~ DEBUT
         , METHODE == 'HISTORIQUE' & VARIANTE %in% c('MOY10J','MED10J') ~ DEBUT - ddays(10 +  map_int(data, ~sum(.x$DATE_INDHIST < DEBUT & .x$DATE_INDHIST >= (DEBUT - ddays(10))))) # A optimiser avec une fonction comparant les jours indisp avec les journées de réf
-        , METHODE == 'HISTORIQUE' & VARIANTE %in% c('MOY4S','MED4S') ~ DEBUT - dweeks(4 + map_int(data, ~sum(wday(.x$DATE_INDHIST)==wday(DEBUT)))) # A optimiser avec une fonction comparant les jours indisp avec les journées de réf
+        , METHODE == 'HISTORIQUE' & VARIANTE %in% c('MOY4S','MED4S') ~ DEBUT - dweeks(4 + map_int(data, ~sum(.x$DATE_INDHIST < DEBUT & wday(.x$DATE_INDHIST) == wday(DEBUT)))) # A optimiser avec une fonction comparant les jours indisp avec les journées de réf
       )
       , FIN_ETENDU = case_when(
-        MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' ~ FIN + as.duration(FIN - DEBUT)
+        MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' ~ FIN + min(as.duration(FIN - DEBUT), dhours(2))
         , TRUE ~ FIN
       )
-    )
-
-  %>%
-    dplyr::filter(METHODE =='RECTANGLE' & MECANISME == 'MA') %>%
+    ) %>%
+    dplyr::filter(METHODE =='RECTANGLE' & MECANISME == 'MA') %>% # A SUPPRIMER
     split(list(.$MECANISME, .$CODE_ENTITE, .$CODE_SITE, .$METHODE, .$DEBUT, .$FIN), drop = TRUE) %>%
+    head(n=100) %>%
     {
       purrr::map_dfr(
         .x = .
         , .f = function(prog, ts = tbl_cdc, prev = tbl_prev)
         {
 
-          ts = mutate(ts, DATE = as_date(HORODATE, tz = 'CET')) %>%
+          ts = ts %>%
             dplyr::filter(
               MECANISME == prog$MECANISME
               , CODE_ENTITE == prog$CODE_ENTITE
               , CODE_SITE == prog$CODE_SITE
-              , DATE >= prog$DEBUT_ETENDU
-              , DATE < prog$FIN_ETENDU
+              , HORODATE >= prog$DEBUT_ETENDU
+              , HORODATE < prog$FIN_ETENDU
             )
 
           if(prog$METHODE == 'PREVISION')
@@ -105,7 +110,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 , DATE >= prog$DEBUT
                 , DATE < prog$FIN
               )
-          }
+          }else{prev = NULL}
 
           if(nrow(ts)==0){
 
@@ -119,6 +124,8 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 )
                 , collapse = '\n')
             )
+            
+            return(NULL)
 
           }else{
 
@@ -126,7 +133,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
               name = paste('CR', unique(prog[['METHODE']]), sep = '_') #application de la méthode de contrôle du réalisé de l'entité
               , tbl_eff = prog
               , tbl_cdc = ts
-              , tbl_prev
+              # , tbl_prev = prev
             ) %>%
               eval()
           }
