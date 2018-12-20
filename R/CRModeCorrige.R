@@ -95,13 +95,15 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
         , .f = function(x,y,z,t,u,v)
         {
           tibble(
-            PERIODE_REFERENCE = unlist(
-              case_when(
-                t == 'MA' & u == 'RECTANGLE' ~ list(lubridate::floor_date(y - v - dminutes(30), unit = '30 minutes')%--%(y - v)) #arrondir au pas 30 minute précédent
-                , t == 'NEBEF' & u == 'RECTANGLE' ~ list((y - min(as.duration(z - y), dhours(2)))%--%y,z%--%(z + min(as.duration(z - y), dhours(2)))) #arrondir au pas 30 minute précédent
-                , u == 'PREVISION' ~ list(y%--%z)
-                , u == 'HISTORIQUE' ~ list((as_date(x$DATE_HIST) + dhours(hour(y)) + dminutes(minute(y)))%--%(as_date(x$DATE_HIST) + dhours(hour(z)) + dminutes(minute(z))))
-                , TRUE ~ list(as.interval(NA))
+            PERIODE_REFERENCE = as_interval(
+              unlist(
+                case_when(
+                  t == 'MA' & u == 'RECTANGLE' ~ list(lubridate::floor_date(as_datetime(y) - dminutes(v) - dminutes(30), unit = '30 minutes')%--%(as_datetime(y) - dminutes(v))) #arrondir au pas 30 minute précédent
+                  , t == 'NEBEF' & u == 'RECTANGLE' ~ list((as_datetime(y) - min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))%--%as_datetime(y),as_datetime(z)%--%(as_datetime(z) + min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))) #arrondir au pas 30 minute précédent
+                  , u == 'PREVISION' ~ list(as_datetime(y)%--%as_datetime(z))
+                  , u == 'HISTORIQUE' ~ list((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z)))))
+                  , TRUE ~ list(as.interval(NA))
+                )
               )
             )
           )
