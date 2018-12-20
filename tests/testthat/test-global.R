@@ -8,7 +8,7 @@ map(.x = list.files(path = paste0(getwd(),'/R'), pattern = '[^Main.R]',full.name
 
 # Chargement des données  -------------------------------------------------
 
-tbl_cdc = LoadCdC(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '.*_20180203.*.csv', full.names = TRUE), dossiers = NULL)
+tbl_cdc = LoadCdC(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '^NEBEF.*_(20180127|20180203|20180210|20180217|20180224).*.csv', full.names = TRUE), dossiers = NULL)
 
 tbl_eff = LoadEffacements(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '(OA_GRD|PEC_GRD)_201802', full.names = TRUE), dossiers = NULL)
 
