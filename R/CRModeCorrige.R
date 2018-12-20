@@ -15,14 +15,14 @@
 #'
 #' @examples
 CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, tbl_homol, tbl_indhist, tbl_prev){
-
+  
   if(nrow(tbl_eff)==0){
     stop('Aucun effacement')
   }
-
+  
   #récupération de la méthode de certification associée à un effacement
   test = fuzzy_left_join(
-    x = mutate(tbl_eff, DATE = as_date(DEBUT,tz='CET'))
+    x = mutate(tbl_eff, DATE = as_date(DEBUT, tz='CET'))
     , y = tbl_entt
     , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
     , match_fun = list(`==`,`==`,`>=`,`<`)
@@ -71,15 +71,15 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
     #identification des journées utilisées pour l'historique
     mutate(
       data = pmap(
-        .l = list(x = data, y = as_date(DEBUT,tz = 'CET'), z = METHODE, t = VARIANTE)
+        .l = list(x = data, y = DEBUT, z = METHODE, t = VARIANTE)
         , .f = function(x,y,z,t)
         {
           tibble(
             DATE_HIST = as_date(
               unlist(
                 case_when(
-                  z == 'HISTORIQUE' & t %in% c('MOY4S','MED4S') ~ list(setdiff(x = seq.Date(from = as_date(y) - weeks(1), length.out = 52, by = '-1 week'), y = x$DATE_INDHIST)[1:4])
-                  , z == 'HISTORIQUE' & t %in% c('MOY10J','MED10J') ~ list(setdiff(x = seq.Date(from = as_date(y) - days(1), length.out = 365, by = '-1 day'), y = x$DATE_INDHIST)[1:10])
+                  z == 'HISTORIQUE' & t %in% c('MOY4S','MED4S') ~ list(setdiff(x = seq.Date(from = as_date(y) - weeks(1), length.out = 52, by = '-1 week'), y = as_date(x$DATE_INDHIST))[1:4])
+                  , z == 'HISTORIQUE' & t %in% c('MOY10J','MED10J') ~ list(setdiff(x = seq.Date(from = as_date(y) - days(1), length.out = 365, by = '-1 day'), y = as_date(x$DATE_INDHIST))[1:10])
                   , TRUE ~ list(as_date(NA))
                 )
               )
@@ -95,41 +95,34 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
         , .f = function(x,y,z,t,u,v)
         {
           tibble(
-            PERIODE_REFERENCE = as_interval(
-              unlist(
-                case_when(
-                  t == 'MA' & u == 'RECTANGLE' ~ list(lubridate::floor_date(as_datetime(y) - dminutes(v) - dminutes(30), unit = '30 minutes')%--%(as_datetime(y) - dminutes(v))) #arrondir au pas 30 minute précédent
-                  , t == 'NEBEF' & u == 'RECTANGLE' ~ list((as_datetime(y) - min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))%--%as_datetime(y),as_datetime(z)%--%(as_datetime(z) + min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))) #arrondir au pas 30 minute précédent
-                  , u == 'PREVISION' ~ list(as_datetime(y)%--%as_datetime(z))
-                  , u == 'HISTORIQUE' ~ list((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z)))))
-                  , TRUE ~ list(as.interval(NA))
-                )
+            PERIODE_REFERENCE = 
+              case_when(
+                t == 'MA' & u == 'RECTANGLE' ~ list(c(lubridate::floor_date(as_datetime(y) - dseconds(v) - dminutes(30), unit = '30 minutes')%--%(as_datetime(y) - dseconds(v)))) #arrondir au pas 30 minute précédent
+                , t == 'NEBEF' & u == 'RECTANGLE' ~ list(c((as_datetime(y) - min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))%--%as_datetime(y),as_datetime(z)%--%(as_datetime(z) + min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2))))) #arrondir au pas 30 minute précédent
+                , u == 'PREVISION' ~ list(c(as_datetime(y)%--%as_datetime(z)))
+                , u == 'HISTORIQUE' ~ list(c((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z))))))
+                , TRUE ~ list(c(as.interval(NA)))
               )
-            )
           )
         }
       )
     )
-
+  
   %>%
-    dplyr::filter(METHODE =='RECTANGLE' & MECANISME == 'MA') %>% # A SUPPRIMER
     split(list(.$MECANISME, .$CODE_ENTITE, .$CODE_SITE, .$METHODE, .$DEBUT, .$FIN), drop = TRUE) %>%
-    head(n=100) %>%
     {
       purrr::map_dfr(
         .x = .
         , .f = function(prog, ts = tbl_cdc, prev = tbl_prev)
         {
-
-          ts = ts %>%
+          real = ts %>%
             dplyr::filter(
               MECANISME == prog$MECANISME
               , CODE_ENTITE == prog$CODE_ENTITE
               , CODE_SITE == prog$CODE_SITE
-              , HORODATE >= prog$DEBUT_ETENDU
-              , HORODATE < prog$FIN_ETENDU
+              , HORODATE %within% list(EFFACEMENT = prog$DEBUT%--%prog$FIN)
             )
-
+          
           if(prog$METHODE == 'PREVISION')
           {
             prev = prev %>%
@@ -137,13 +130,51 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 MECANISME == prog$MECANISME
                 , CODE_ENTITE == prog$CODE_ENTITE
                 , CODE_SITE == prog$CODE_SITE
-                , DATE >= prog$DEBUT
-                , DATE < prog$FIN
+                , HORODATE %within% list(REFERENCE = prog$data[[1]]$PERIODE_REFERENCE[[1]])
               )
-          }else{prev = NULL}
-
+            
+            inner_join(
+              x = mutate(real
+                         , HORODATE_UTC_FUSION = 
+                           if_else(
+                             condition = unique(prev$PAS) > PAS
+                             , true = as_datetime(unique(prev$PAS) * as.numeric(HORODATE_UTC)%/%unique(prev$PAS), tz = 'UTC')
+                             , false = HORODATE_UTC
+                           )
+              )
+              , y = prev
+              , by = c('MECANISME','CODE_ENTITE','CODE_SITE','HORODATE_UTC_FUSION'='HORODATE_UTC')
+            ) %>%
+              transmute(MECANISME, CODE_ENTITE,CODE_SITE, HORODATE = HORODATE.x, HORODATE_UTC, REALISE = PUISSANCE.x, REFERENCE = PUISSANCE.y, PAS = PAS.x)
+          }
+          
+          if(prog$METHODE == 'HISTORIQUE')
+          {
+            hist = ts %>%
+              dplyr::filter(
+                MECANISME == prog$MECANISME
+                , CODE_ENTITE == prog$CODE_ENTITE
+                , CODE_SITE == prog$CODE_SITE
+                , HORODATE %within% as.list(x = prog$data[[1]]$PERIODE_REFERENCE[[1]])
+              )
+            
+            inner_join(
+              x = mutate(ts
+                         , HORODATE_UTC_FUSION = 
+                           if_else(
+                             condition = unique(prev$PAS) > PAS
+                             , true = as_datetime(unique(prev$PAS) * as.numeric(HORODATE_UTC)%/%unique(prev$PAS), tz = 'UTC')
+                             , false = HORODATE_UTC
+                           )
+              )
+              , y = prev
+              , by = c('MECANISME','CODE_ENTITE','CODE_SITE','HORODATE_UTC_FUSION'='HORODATE_UTC')
+            ) %>%
+              transmute(MECANISME, CODE_ENTITE,CODE_SITE, HORODATE = HORODATE.x, HORODATE_UTC, REALISE = PUISSANCE.x, REFERENCE = PUISSANCE.y, PAS = PAS.x)
+          }
+          
           if(nrow(ts)==0){
-
+            
             warning(
               paste(
                 capture.output(
@@ -154,11 +185,11 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 )
                 , collapse = '\n')
             )
-
+            
             return(NULL)
-
+            
           }else{
-
+            
             call(
               name = paste('CR', unique(prog[['METHODE']]), sep = '_') #application de la méthode de contrôle du réalisé de l'entité
               , tbl_eff = prog
@@ -170,13 +201,13 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
         }
       )
     }
-
+  
   #aggrégation des tbl_cdc par entité
   tbl_cdcagr = tbl_cdc %>%
     group_by(CODE_ENTITE,HORODATE,HORODATE_UTC) %>%
     summarise(PUISSANCE = sum(PUISSANCE)) %>%
     ungroup()
-
+  
   if(nrow(entites_actives)==0)
   {
     warning('Aucune entité activée au cours de la période de calcul')
@@ -200,28 +231,28 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
       )
       , .f =
     )
-
+    
   }
-
+  
   tbl_cdccrmc1<-list()
-
+  
   if(length(entites)==0){
-
+    
     print("Aucune entite activee au cours de la semaine")
-
+    
   }else{
-
+    
     #2 Boucle sur les entites----
     for(i in 1:length(entites)){
-
+      
       entite<-entites[i]
       tbl_cdcagr30e<-tbl_cdcagr[tbl_cdcagr$CODE_ENTITE==entite,]
       eff<-tbl_eff[tbl_eff$CODE_ENTITE==entite,]
-
+      
       if(nrow(eff)>0 & nrow(tbl_cdcagr30e)>0){
-
+        
         sites <- tbl_sites$CODE_SITE[tbl_sites$CODE_ENTITE==entite]
-
+        
         #2a Application des methodes a la maille entite
         # if(substr(entite,1,3)!="EDE"){
         #
@@ -229,9 +260,9 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
         #   METHODE = "RECTANGLE_MA"
         #
         # }else{
-
+        
         METHODE <- tbl_entt$METHODE[tbl_entt$CODE_ENTITE == entite][1]
-
+        
         #Si la methode est "PREVISION" et qu'il n'y a aucune prevision alors "RECTANGLE"
         #Si la methode est "HISTORIQUE" et qu'il n'y a aucune variante alors "RECTANGLE"
         if(length(METHODE)==0 | is.na(METHODE))METHODE <- "RECTANGLE"
@@ -246,54 +277,54 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
             tbl_cdcref<-CR_RectangleDouble(tbl_cdc=tbl_cdcagr30e,eff=eff)
             tbl_cdcagr30e$PUISSANCE_effacee <- tbl_cdcref$PUISSANCE - tbl_cdcagr30e$PUISSANCE
             tbl_cdcagr30e$SIGNE = tbl_cdcref$SIGNE
-
+            
             tbl_cdcagr30e$PUISSANCE_effacee[tbl_cdcagr30e$PUISSANCE_effacee < 0 & tbl_cdcagr30e$SIGNE > 0] <- 0
             tbl_cdcagr30e$PUISSANCE_effacee[tbl_cdcagr30e$PUISSANCE_effacee > 0 & tbl_cdcagr30e$SIGNE < 0] <- 0
           }
-
+          
         }
-
+        
         tbl_indhistEff<-unique(substr(tbl_effhisto$DEBUT[tbl_effhisto$CODE_ENTITE==entite],1,10))#on invalide la journee de debut d'effacement
-
+        
         tbl_cdcent<-tbl_cdc[tbl_cdc$CODE_ENTITE==entite,]
         tbl_cdcsites1<-list()
-
+        
         logprint(paste(entite,METHODE,"\n"))
-
+        
         for(j in 1:length(sites)){
-
+          
           if(length(sites)<=10)logprint(paste(sites[j],METHODE,"\n"))
-
+          
           tbl_cdcsit<-tbl_cdcent[tbl_cdcent$CODE_SITE==sites[j],]
-
+          
           if(nrow(tbl_cdcsit)==0){
-
+            
             print(paste("pas de courbes pour", sites[j]))
-
+            
           }else{
-
+            
             #2b Application des methodes a la maille site
-
+            
             if(METHODE=="SITE_A_SITE"){
               tbl_cdcref<-CR_RectangleDouble(tbl_cdc=tbl_cdcsit,eff=eff)
             }
-
+            
             if(METHODE=="PREVISION")
             {
               tbl_prevsit<-tbl_prev[tbl_prev$CODE_SITE == sites[j],]
               tbl_cdcref <- CR_PREVISION(tbl_prev = tbl_prevsit,eff = eff,tbl_cdc = tbl_cdcsit)
               if(length(tbl_cdcref)==0)logprint(paste("Pas de tbl_cdc de prevision pour le site", sites[j]," : application du rectangle \n"))
             }
-
+            
             if(METHODE=="HISTORIQUE")
             {
               VARIANTE_HIST <- tbl_homol$VARIANTE_HIST[tbl_homol$CODE_SITE==sites[j]]
               if(length(VARIANTE_HIST) == 0) VARIANTE_HIST <- "MOY10J"
-
+              
               tbl_cdcref <- CR_HISTORIQUE(tbl_cdc=tbl_cdcsit,eff=eff,VARIANTE_HIST=VARIANTE_HIST,DATE_INDISPO=c(tbl_indhistEff,tbl_indhist$DATE_INDISPO[tbl_indhist$CODE_SITE==sites[j]]))
-
+              
             }
-
+            
             if(METHODE=="RECTANGLE" | length(tbl_cdcref)==0){
               if(substr(entite,1,3)!="EDE"){
                 tbl_cdcref <- CR_RectangleSimple(tbl_cdc=tbl_cdcsit,eff=eff)
@@ -301,39 +332,39 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 tbl_cdcref<-CR_RectangleDouble(tbl_cdc=tbl_cdcsit,eff=eff)
               }
             }
-
+            
             tbl_cdcsit$PUISSANCE_effacee<-tbl_cdcref$PUISSANCE-tbl_cdcsit$PUISSANCE
-
+            
             tbl_cdcsit$SIGNE = tbl_cdcref$SIGNE
-
+            
             tbl_cdcsit$PUISSANCE_effacee[tbl_cdcsit$PUISSANCE_effacee < 0 & tbl_cdcsit$SIGNE > 0] <- 0
             tbl_cdcsit$PUISSANCE_effacee[tbl_cdcsit$PUISSANCE_effacee > 0 & tbl_cdcsit$SIGNE < 0] <- 0
-
+            
             tbl_cdcsites1[[j]]<-tbl_cdcsit
-
+            
           }#/if tbl_cdc
         }#/for site
         tbl_cdcsites<- do.call("rbind",tbl_cdcsites1)
-
+        
         #2c Filtrage sur les journees avec effacement pour la semaine consideree (les tbl_eff de l'historique n'interviennent pas ici)
         tbl_cdcsites <- tbl_cdcsites[substr(tbl_cdcsites$HORODATE,1,10) %in% substr(c(eff$DEBUT,eff$FIN-1),1,10),]
-
+        
         #2d1 Agregation des tbl_eff-sites a la maille entite
-
+        
         #tbl_cdcenteffagr<-aggregate(PUISSANCE_effacee~HORODATE_UTC+HORODATE,tbl_cdcsites,sum)
         tbl_cdcenteffagr<-aggregate(PUISSANCE_effacee~CODE_ENTITE+HORODATE_UTC+HORODATE,tbl_cdcsites,sum)#Plante si tbl_cdcsites vide suite au filtre
-
+        
         if(METHODE %in% c("HISTORIQUE","PREVISION")) tbl_cdcagr30e<-tbl_cdcenteffagr
-
+        
         #2d2 Recalage des volumes avec la capacite de l'EDE (exprimee en kW)
         if(substr(entite,1,3)=="EDE"){
           capa<-sum(tbl_sites$CAPA_MAX_H_SITE[tbl_sites$CODE_ENTITE==entite])
           tbl_cdcagr30e$PUISSANCE_effacee[abs(tbl_cdcagr30e$PUISSANCE_effacee)>capa]<- capa * sign(tbl_cdcagr30e$PUISSANCE_effacee)
         }
-
+        
         #tbl_cdcenteffagr2<-merge(tbl_cdcenteffagr,tbl_cdcagr30e,by=c("HORODATE_UTC","HORODATE"))
         tbl_cdcenteffagr2<-merge(tbl_cdcenteffagr,tbl_cdcagr30e,by=c("CODE_ENTITE","HORODATE_UTC","HORODATE"))
-
+        
         tbl_cdcenteffagr2$ratio<-tbl_cdcenteffagr2$PUISSANCE_effacee.y/tbl_cdcenteffagr2$PUISSANCE_effacee.x#on divise l'effacement a la maille entite par la somme des tbl_eff a la maille site
         tbl_cdcenteffagr2$ratio[tbl_cdcenteffagr2$PUISSANCE_effacee.x==0]<-1
         tbl_cdcsit2<-merge(tbl_cdcsites,tbl_cdcenteffagr2[,c("CODE_ENTITE","HORODATE_UTC","HORODATE","ratio")],by=c("CODE_ENTITE","HORODATE_UTC","HORODATE"))
