@@ -51,7 +51,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
       , CAPA_MAX_H_SITE
       , TYPE_CONTRAT
       , METHODE = METHODE.x
-      #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (le plus répandue utile ?)
+      #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (la plus répandue; utile ?)
       , VARIANTE = if_else(condition = METHODE.x == 'HISTORIQUE' & is.na(VARIANTE), true = 'MOY10J', false =  VARIANTE)
       , DEBUT = DEBUT.x
       , FIN = FIN.x
@@ -68,6 +68,23 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
     transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x,CODE_SITE = CODE_SITE.x, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO, DATE_INDHIST = DATE) %>%
     group_by(MECANISME, CODE_ENTITE, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO) %>%
     nest() %>%
+    #ajout des journées d'effacement et reports passées du site dans l'historique d'indisponibilité
+    {
+      mutate(.data = .
+             , data = pmap(
+               .l = list(x = data, y = CODE_SITE, z = METHODE, t = DEBUT)
+               , .f = function(x, y , z, t, u = transmute(., CODE_SITE, DATE_INDHIST = as_date(DEBUT, tz = 'CET')))
+               {
+                 if(z == 'HISTORIQUE')
+                 {
+                   x %>%
+                     bind_rows(subset(u, CODE_SITE == y & DATE_INDHIST < as_date(t), DATE_INDHIST)) %>%
+                     distinct()
+                 }else{tibble(DATE_INDHIST = as_date(NA))}
+               }
+             )
+      )
+    } %>%
     #identification des journées utilisées pour l'historique
     mutate(
       data = pmap(
@@ -78,8 +95,8 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
             DATE_HIST = as_date(
               unlist(
                 case_when(
-                  z == 'HISTORIQUE' & t %in% c('MOY4S','MED4S') ~ list(setdiff(x = seq.Date(from = as_date(y) - weeks(1), length.out = 52, by = '-1 week'), y = as_date(x$DATE_INDHIST))[1:4])
-                  , z == 'HISTORIQUE' & t %in% c('MOY10J','MED10J') ~ list(setdiff(x = seq.Date(from = as_date(y) - days(1), length.out = 365, by = '-1 day'), y = as_date(x$DATE_INDHIST))[1:10])
+                  z == 'HISTORIQUE' & t %in% c('MOY4S','MED4S') ~ list(as_date(setdiff(x = seq.Date(from = as_date(as_datetime(y)) - weeks(1), length.out = 52, by = '-1 week'), y = as_date(x$DATE_INDHIST))[1:4]))
+                  , z == 'HISTORIQUE' & t %in% c('MOY10J','MED10J') ~ list(as_date(setdiff(x = seq.Date(from = as_date(as_datetime(y)) - days(1), length.out = 365, by = '-1 day'), y = as_date(x$DATE_INDHIST))[1:10]))
                   , TRUE ~ list(as_date(NA))
                 )
               )
@@ -95,20 +112,20 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
         , .f = function(x,y,z,t,u,v)
         {
           tibble(
-            PERIODE_REFERENCE = 
-              case_when(
-                t == 'MA' & u == 'RECTANGLE' ~ list(c(lubridate::floor_date(as_datetime(y) - dseconds(v) - dminutes(30), unit = '30 minutes')%--%(as_datetime(y) - dseconds(v)))) #arrondir au pas 30 minute précédent
+            PERIODE_REFERENCE = do.call(
+              args = case_when(
+                t == 'MA' & u == 'RECTANGLE' ~ list(c(lubridate::floor_date(as_datetime(y) - dseconds(v) - dminutes(30), unit = '30 minutes')%--%lubridate::floor_date(as_datetime(y) - dseconds(v), unit = '30 minutes'))) #arrondir au pas 30 minute précédent
                 , t == 'NEBEF' & u == 'RECTANGLE' ~ list(c((as_datetime(y) - min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))%--%as_datetime(y),as_datetime(z)%--%(as_datetime(z) + min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2))))) #arrondir au pas 30 minute précédent
                 , u == 'PREVISION' ~ list(c(as_datetime(y)%--%as_datetime(z)))
                 , u == 'HISTORIQUE' ~ list(c((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z))))))
                 , TRUE ~ list(c(as.interval(NA)))
               )
+              , what = 'c'
+            )
           )
         }
       )
-    )
-  
-  %>%
+    ) %>%
     split(list(.$MECANISME, .$CODE_ENTITE, .$CODE_SITE, .$METHODE, .$DEBUT, .$FIN), drop = TRUE) %>%
     {
       purrr::map_dfr(
@@ -158,19 +175,21 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 , HORODATE %within% as.list(x = prog$data[[1]]$PERIODE_REFERENCE[[1]])
               )
             
-            inner_join(
-              x = mutate(ts
-                         , HORODATE_UTC_FUSION = 
-                           if_else(
-                             condition = unique(prev$PAS) > PAS
-                             , true = as_datetime(unique(prev$PAS) * as.numeric(HORODATE_UTC)%/%unique(prev$PAS), tz = 'UTC')
-                             , false = HORODATE_UTC
-                           )
+            # gérer les variantes
+          }
+          
+          if(prog$METHODE == 'RECTANGLE')
+          {
+            #gérer les mécansismes
+            
+            rect = ts %>%
+              dplyr::filter(
+                MECANISME == prog$MECANISME
+                , CODE_ENTITE == prog$CODE_ENTITE
+                , CODE_SITE == prog$CODE_SITE
+                , HORODATE %within% as.list(x = prog$data[[1]]$PERIODE_REFERENCE[[1]])
               )
-              , y = prev
-              , by = c('MECANISME','CODE_ENTITE','CODE_SITE','HORODATE_UTC_FUSION'='HORODATE_UTC')
-            ) %>%
-              transmute(MECANISME, CODE_ENTITE,CODE_SITE, HORODATE = HORODATE.x, HORODATE_UTC, REALISE = PUISSANCE.x, REFERENCE = PUISSANCE.y, PAS = PAS.x)
+            
           }
           
           if(nrow(ts)==0){
@@ -185,18 +204,6 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_effhisto, tbl_entt, t
                 )
                 , collapse = '\n')
             )
-            
-            return(NULL)
-            
-          }else{
-            
-            call(
-              name = paste('CR', unique(prog[['METHODE']]), sep = '_') #application de la méthode de contrôle du réalisé de l'entité
-              , tbl_eff = prog
-              , tbl_cdc = ts
-              # , tbl_prev = prev
-            ) %>%
-              eval()
           }
         }
       )
