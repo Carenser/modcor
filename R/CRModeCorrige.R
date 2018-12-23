@@ -3,11 +3,11 @@
 #' @param tbl_cdc
 #' @param tbl_sites
 #' @param tbl_eff
-#' @param tbl_effhisto
 #' @param tbl_entt
 #' @param tbl_homol
 #' @param tbl_indhist
 #' @param tbl_prev
+#'
 #' @import tidyverse
 #' @import fuzzyjoin
 #' @return
@@ -137,9 +137,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
             )
           }
         )
-      )
-
-    %>%
+      ) %>%
       mutate(
         data = purrr::pmap(
           .l = list(ref = data, deb = DEBUT, fin = FIN, meca = MECANISME, meth = METHODE, entt = CODE_ENTITE, site = CODE_SITE, variante = VARIANTE, signe = SIGNE)
@@ -158,7 +156,37 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
 
             case_when(
 
-              meth == 'PREVISION' ~
+              meth == 'RECTANGLE' & meca == 'MA' ~
+                ts %>%
+                dplyr::filter(
+                  MECANISME == meca
+                  , CODE_ENTITE == entt
+                  , CODE_SITE == site
+                  , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+                ) %>%
+                add_column(REFERENCE =
+                             mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
+                           , .before = 'PAS') %>%
+                rename(REALISE = PUISSANCE)
+
+              , meth == 'RECTANGLE' & meca == 'NEBEF' ~
+                ts %>%
+                dplyr::filter(
+                  MECANISME == meca
+                  , CODE_ENTITE == entt
+                  , CODE_SITE == site
+                  , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+                ) %>%
+                add_column(REFERENCE =
+                             signe * min(
+                               signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
+                               , signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[2]), PUISSANCE)[[1]])
+                             )
+                           , .before = 'PAS'
+                ) %>%
+                rename(REALISE = PUISSANCE)
+
+              , meth == 'PREVISION' ~
                 prev %>%
                 dplyr::filter(
                   MECANISME == meca
@@ -166,7 +194,7 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
                   , CODE_SITE == site
                   , HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE)
                 ) %>%
-                inner_join(
+                dplyr::full_join(
                   y = mutate(
                     ts %>%
                       dplyr::filter(
@@ -203,8 +231,8 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
                     , TRUE ~ NA_real_
                   )
                 ) %>%
-                ungroup() %>%
-                inner_join(
+                dplyr::ungroup() %>%
+                dplyr::full_join(
                   y = ts %>%
                     dplyr::filter(
                       MECANISME == meca
@@ -216,35 +244,6 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
                 ) %>%
                 transmute(MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, REALISE = PUISSANCE, REFERENCE, PAS)
 
-              , meth == 'RECTANGLE' & meca == 'MA' ~
-                ts %>%
-                dplyr::filter(
-                  MECANISME == meca
-                  , CODE_ENTITE == entt
-                  , CODE_SITE == site
-                  , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
-                ) %>%
-                add_column(REFERENCE =
-                             mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
-                           , .before = 'PAS') %>%
-                rename(REALISE = PUISSANCE)
-
-              , meth == 'RECTANGLE' & meca == 'NEBEF' ~
-                ts %>%
-                dplyr::filter(
-                  MECANISME == meca
-                  , CODE_ENTITE == entt
-                  , CODE_SITE == site
-                  , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
-                ) %>%
-                add_column(REFERENCE =
-                             signe * min(
-                               signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
-                               , signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[2]), PUISSANCE)[[1]])
-                             )
-                           , .before = 'PAS'
-                ) %>%
-                rename(REALISE = PUISSANCE)
               , TRUE ~ tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer())
             )
           }

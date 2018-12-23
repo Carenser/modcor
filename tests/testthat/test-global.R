@@ -199,7 +199,37 @@ test2 = dplyr::filter(test, MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' & !is.
 
         case_when(
 
-          meth == 'PREVISION' ~
+          meth == 'RECTANGLE' & meca == 'MA' ~
+            ts %>%
+            dplyr::filter(
+              MECANISME == meca
+              , CODE_ENTITE == entt
+              , CODE_SITE == site
+              , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+            ) %>%
+            add_column(REFERENCE =
+                         mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
+                       , .before = 'PAS') %>%
+            rename(REALISE = PUISSANCE)
+
+          , meth == 'RECTANGLE' & meca == 'NEBEF' ~
+            ts %>%
+            dplyr::filter(
+              MECANISME == meca
+              , CODE_ENTITE == entt
+              , CODE_SITE == site
+              , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+            ) %>%
+            add_column(REFERENCE =
+                         signe * min(
+                           signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
+                           , signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[2]), PUISSANCE)[[1]])
+                         )
+                       , .before = 'PAS'
+            ) %>%
+            rename(REALISE = PUISSANCE)
+
+          , meth == 'PREVISION' ~
             prev %>%
             dplyr::filter(
               MECANISME == meca
@@ -207,7 +237,7 @@ test2 = dplyr::filter(test, MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' & !is.
               , CODE_SITE == site
               , HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE)
             ) %>%
-            inner_join(
+            dplyr::full_join(
               y = mutate(
                 ts %>%
                   dplyr::filter(
@@ -244,8 +274,8 @@ test2 = dplyr::filter(test, MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' & !is.
                 , TRUE ~ NA_real_
               )
             ) %>%
-            ungroup() %>%
-            inner_join(
+            dplyr::ungroup() %>%
+            dplyr::full_join(
               y = ts %>%
                 dplyr::filter(
                   MECANISME == meca
@@ -257,38 +287,17 @@ test2 = dplyr::filter(test, MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' & !is.
             ) %>%
             transmute(MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, REALISE = PUISSANCE, REFERENCE, PAS)
 
-          , meth == 'RECTANGLE' & meca == 'MA' ~
-            ts %>%
-            dplyr::filter(
-              MECANISME == meca
-              , CODE_ENTITE == entt
-              , CODE_SITE == site
-              , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
-            ) %>%
-            add_column(REFERENCE =
-                         mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
-                       , .before = 'PAS') %>%
-            rename(REALISE = PUISSANCE)
-
-          , meth == 'RECTANGLE' & meca == 'NEBEF' ~
-            ts %>%
-            dplyr::filter(
-              MECANISME == meca
-              , CODE_ENTITE == entt
-              , CODE_SITE == site
-              , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
-            ) %>%
-            add_column(REFERENCE =
-                         signe * min(
-                           signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
-                           , signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[2]), PUISSANCE)[[1]])
-                         )
-                       , .before = 'PAS'
-            ) %>%
-            rename(REALISE = PUISSANCE)
           , TRUE ~ tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer())
         )
       }
     )
   )
 
+library(plotly)
+
+p = test3 %>%
+  gather(key = 'TYPE', value = 'PUISSANCE', - MECANISME, -CODE_ENTITE, -CODE_SITE, - HORODATE, -HORODATE_UTC, - PAS) %>%
+  ggplot(mapping = aes(x = HORODATE_UTC, y = PUISSANCE, col = TYPE, text = str_c(CODE_ENTITE, CODE_SITE))) +
+  geom_line() +
+  labs(title = text)
+ggplotly(p, tooltip = c('PUISSANCE','HORODATE_UTC'))
