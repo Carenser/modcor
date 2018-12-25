@@ -35,7 +35,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
   }else{
 
     #récupération de la méthode de certification associée à un effacement
-    tbl_cdcRef =
+    # tbl_cdcRef =
       fuzzy_left_join(
         x = mutate(tbl_eff, DATE = as_date(DEBUT, tz='CET'))
         , y = tbl_entt
@@ -155,14 +155,14 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
 
             #affichage des caractéristiques de l'effacement ou report
 
-            print(paste0('\nPERIODE\t: ', as_datetime(deb)%--%as_datetime(fin)))
-            print(paste0('\nMECANISME\t: ', meca))
-            print(paste0('\nMETHODE\t: ',meth))
-            print(paste0('\nENTITE\t: ',entt))
-            print(paste0('\nSITE\t: ',site))
-            print(paste0(if_else(meth == 'HISTORIQUE', str_c('\nVARIANTE\t: ',variante),'')))
-            print(paste0('\nSENS\t: ', if_else(signe < 0, 'REPORT', 'EFFACEMENT')))
-            print(paste0('\nPERIODE DE REFERENCE\t:', ref))
+            cat(paste0('\nPERIODE\t: ', as_datetime(deb)%--%as_datetime(fin)))
+            cat(paste0('\nMECANISME\t: ', meca))
+            cat(paste0('\nMETHODE\t: ',meth))
+            cat(paste0('\nENTITE\t: ',entt))
+            cat(paste0('\nSITE\t: ',site))
+            cat(paste0(if_else(meth == 'HISTORIQUE', str_c('\nVARIANTE\t: ',variante),'')))
+            cat(paste0('\nSENS\t: ', if_else(signe < 0, 'REPORT', 'EFFACEMENT')))
+            print(paste0('\nPERIODE DE REFERENCE\t:', paste(ref, collapse = '\t')))
 
             if(
               nrow(ts %>%
@@ -304,64 +304,84 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
       )
   }
 
-  tbl_cdcRef %>%
-  mutate(
-     `CHRONIQUE DE REFERENCE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REFERENCE))) < as.duration(FIN - DEBUT)%/%dseconds(unique(data$PAS))
-     , `CHRONIQUE DE REALISE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REALISE))) < as.duration(FIN - DEBUT)%/%dseconds(unique(data$PAS))
-  )
-
-  if(any(with(tbl_cdcRef,`CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`)))
-  {
-    dplyr::filter(tbl_cdcRef, `CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`) %>%
-      dplyr::select(CODE_ENTITE,CODE_SITE,DEBUT,FIN) %>%
-      {
-        warning(
-          paste(
-            capture.output(
-              {
-                cat("Courbe(s) de charge réalisée ou de référence incomplète(s) sur la période d'effacement ou report")
-                print(subset(., `CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`, data)[[1]][which(is.na(REALISE)|is.na(REFERENCE)), 'HORODATE_UTC'])
-                #print(., len = nrow(.))
-              }
-            )
-            , collapse = '\n')
-        )
-      }
-  }
-
-  #aggrégation des tbl_cdc par entité
-  tbl_cdcRefAgr = tbl_cdcRef %>%
-    group_by(CODE_ENTITE,HORODATE,HORODATE_UTC) %>%
-    summarise(
-      PUISSANCE = sum(PUISSANCE)
-      , CAPA_MAX_H_ENTITE = sum(CAPA_MAX_H_SITE)
-    ) %>%
-    ungroup()
-
-  # #recalage du volume d'effacement sur la capacité totale de l'entité
+  # tbl_cdcRef %>%
+  #   mutate(
+  #     `CHRONIQUE DE REFERENCE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REFERENCE))) < as.duration(FIN - DEBUT)%/%dseconds(unique(data$PAS))
+  #     , `CHRONIQUE DE REALISE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REALISE))) < as.duration(FIN - DEBUT)%/%dseconds(unique(data$PAS))
+  #   )
   #
-  # mutate(
-  #   `PREVISION INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REFERENCE))) < as.duration(FIN - DEBUT)%/%dseconds(int_step)
-  #   , `COURBE DE CHARGE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$PUISSANCE))) < as.duration(FIN - DEBUT)%/%dseconds(int_step)
-  # )
-  #
-  # if(any(with(tbl_cdcref,`PREVISION INCOMPLETE`|`COURBE DE CHARGE INCOMPLETE`)))
+  # if(any(with(tbl_cdcRef,`CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`)))
   # {
-  #   dplyr::filter(tbl_cdcref, `PREVISION INCOMPLETE`|`COURBE DE CHARGE INCOMPLETE`) %>%
+  #   dplyr::filter(tbl_cdcRef, `CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`) %>%
   #     dplyr::select(CODE_ENTITE,CODE_SITE,DEBUT,FIN) %>%
   #     {
   #       warning(
   #         paste(
   #           capture.output(
   #             {
-  #               cat('Courbe(s) de charge ou de prévision manquante(s)\n Contrôle du réalisé impossible pour les activations suivantes :\n')
-  #               print(., len = nrow(.))
+  #               cat("Courbe(s) de charge réalisée ou de référence incomplète(s) sur la période d'effacement ou report")
+  #               print(subset(., `CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`, data)[[1]][which(is.na(REALISE)|is.na(REFERENCE)), 'HORODATE_UTC'])
+  #               #print(., len = nrow(.))
   #             }
   #           )
   #           , collapse = '\n')
   #       )
   #     }
   # }
+
+  #aggrégation des tbl_cdc par entité
+  # tbl_cdcRefAgr = dplyr::filter(tbl_cdcRef, METHODE == 'RECTANGLE') %>%
+  #   group_by(MECANISME, METHODE, CODE_ENTITE, HORODATE, HORODATE_UTC) %>%
+  #   summarise(
+  #     PUISSANCE = sum(PUISSANCE)
+  #     , CAPA_MAX_H_ENTITE = sum(CAPA_MAX_H_SITE)
+  #   ) %>%
+  #   mutate(
+  #     data = case_when(
+  #       #puissance moyenne sur la demi-heure ronde précédant le DMO
+  #       meth == 'RECTANGLE' & meca == 'MA' ~
+  #
+  #         list(
+  #           ts %>%
+  #             dplyr::filter(
+  #               MECANISME == meca
+  #               , CODE_ENTITE == entt
+  #               , CODE_SITE == site
+  #               , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+  #             ) %>%
+  #             add_column(REFERENCE =
+  #                          mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
+  #                        , .before = 'PAS') %>%
+  #             rename(REALISE = PUISSANCE)
+  #         )
+  #       #puissance moyenne minimum, resp. maximum, entre la période précédant et la période suivant l'effacement, resp. le report
+  #       , meth == 'RECTANGLE' & meca == 'NEBEF' ~
+  #
+  #         list(
+  #           ts %>%
+  #             dplyr::filter(
+  #               MECANISME == meca
+  #               , CODE_ENTITE == entt
+  #               , CODE_SITE == site
+  #               , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+  #             ) %>%
+  #             add_column(REFERENCE =
+  #                          signe * min(
+  #                            signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[1]), PUISSANCE)[[1]])
+  #                            , signe * mean(subset(ts, MECANISME == meca & CODE_ENTITE == entt & CODE_SITE == site & HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE[2]), PUISSANCE)[[1]])
+  #                          )
+  #                        , .before = 'PAS'
+  #             ) %>%
+  #             rename(REALISE = PUISSANCE)
+  #         )
+  #
+  #     )
+  #   )%>%
+  #   ungroup()
+
+  #recalage du volume d'effacement sur la capacité totale de l'entité
+
+  # return(tbl_cdcRef)
 
 }
 #   tbl_cdccrmc1<-list()

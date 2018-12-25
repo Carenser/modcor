@@ -22,7 +22,7 @@ tbl_indhist = read_indispo(dossiers  =  paste0(getwd(),'/data-raw/', c('201712',
 
 tbl_prev = read_prev(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
-tbl_cdcRef = create_ref(tbl_cdc = tbl_cdc, tbl_sites = tbl_sites, tbl_eff = tbl_eff, tbl_entt = tbl_entt, tbl_homol = tbl_homol, tbl_indhist = tbl_indhist, tbl_prev = tbl_prev)
+tbl_cdcRef = create_ref(tbl_cdc = tbl_cdc, tbl_sites = tbl_sites, tbl_eff = dplyr::filter(tbl_eff,MECANISME == 'NEBEF'), tbl_entt = tbl_entt, tbl_homol = tbl_homol, tbl_indhist = tbl_indhist, tbl_prev = tbl_prev)
 
 
 ref = subset(test,MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' & !is.na(CODE_SITE), data)[[1]][[1]]
