@@ -17,6 +17,7 @@
 create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist, tbl_prev){
 
   if(nrow(tbl_eff)==0){
+
     warning('Aucune entité activée au cours de la période de calcul')
     return(
       tibble(
@@ -30,15 +31,17 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
         , SIGNE = integer()
       )
     )
+
   }else{
 
     #récupération de la méthode de certification associée à un effacement
-    test = fuzzy_left_join(
-      x = mutate(tbl_eff, DATE = as_date(DEBUT, tz='CET'))
-      , y = tbl_entt
-      , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-      , match_fun = list(`==`,`==`,`>=`,`<`)
-    ) %>%
+    tbl_cdcRef =
+      fuzzy_left_join(
+        x = mutate(tbl_eff, DATE = as_date(DEBUT, tz='CET'))
+        , y = tbl_entt
+        , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
+        , match_fun = list(`==`,`==`,`>=`,`<`)
+      ) %>%
       #application de la méthode du rectangle par défaut
       replace_na(list(METHODE = 'RECTANGLE')) %>%
       transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO) %>%
@@ -63,15 +66,15 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
         , CAPA_MAX_H_SITE
         , TYPE_CONTRAT
         , METHODE = METHODE.x
-        #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (la plus répandue; utile ?)
+        #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (la plus répandue ; utile ?)
         , VARIANTE = if_else(condition = METHODE.x == 'HISTORIQUE' & is.na(VARIANTE), true = 'MOY10J', false =  VARIANTE)
         , DEBUT = DEBUT.x
         , FIN = FIN.x
         , SIGNE
         , DMO
       ) %>%
-      distinct() %>% #sites homologués à d'autres méthodes que le rectangle
-      #fusion avec les tables d'indisponibilité
+      distinct() %>% #sites homologués à d'autres méthodes que le rectangle (utile ?)
+      #prise en compte des périodes d'indisponibilité pour la méthode HISTORIQUE
       fuzzyjoin::fuzzy_left_join(
         y = tbl_indhist
         , by = c('MECANISME','CODE_ENTITE','CODE_SITE','DEBUT' = 'DATE')
@@ -80,7 +83,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
       transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x,CODE_SITE = CODE_SITE.x, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO, DATE_INDHIST = DATE) %>%
       group_by(MECANISME, CODE_ENTITE, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO) %>%
       nest() %>%
-      #ajout des journées d'effacement et reports passées du site dans l'historique d'indisponibilité
+      #ajout des journées d'effacement ou report passées du site dans l'historique d'indisponibilité pour la méthode HISTORIQUE
       {
         mutate(.data = .
                , data = pmap(
@@ -97,7 +100,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                )
         )
       } %>%
-      #identification des journées utilisées comme historique pour la méthode HISTORIQUE
+      #identification des journées utilisées comme historique pour la méthode HISTORIQUE et suppression des périodes d'indisponibilité pour les autres méthodes (gain en espace)
       mutate(
         data = pmap(
           .l = list(x = data, y = DEBUT, z = METHODE, t = VARIANTE)
@@ -117,7 +120,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
           }
         )
       ) %>%
-      #identification des périodes de référence en fonction des méthodes
+      #identification des périodes de référence selon les méthodes
       mutate(
         data = purrr::pmap(
           .l = list(x = data, y = DEBUT, z = FIN, t = MECANISME, u = METHODE, v = DMO)
@@ -126,10 +129,15 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
             tibble(
               PERIODE_REFERENCE = do.call(
                 args = case_when(
+                  #les points sur la demi-heure ronde précédant le délai de mobilisation de l'offre
                   t == 'MA' & u == 'RECTANGLE' ~ list(c(lubridate::floor_date(as_datetime(y) - dseconds(v) - dminutes(30), unit = '30 minutes')%--%lubridate::floor_date(as_datetime(y) - dseconds(v), unit = '30 minutes'))) #arrondir au pas 30 minute précédent
+                  #les points précédant et suivant l'effacement sur une période égale au minimum entre la durée de l'effacement et 2 heures (cas des entités télérelevées)
                   , t == 'NEBEF' & u == 'RECTANGLE' ~ list(c((as_datetime(y) - min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))%--%as_datetime(y),as_datetime(z)%--%(as_datetime(z) + min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2))))) #arrondir au pas 30 minute précédent
+                  #les points de la chronique de prévision portant sur la période d'effacement ou de report
                   , u == 'PREVISION' ~ list(c(as_datetime(y)%--%as_datetime(z)))
+                  #les points passés selon la variante, 4 même jours de semaine éligibles ou 10 derniers jours éligibles, aux mêmes heures que celles de la période d'effacement ou report
                   , u == 'HISTORIQUE' ~ list(c((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z))))))
+
                   , TRUE ~ list(c(as.interval(NA)))
                 )
                 , what = 'c'
@@ -138,12 +146,14 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
           }
         )
       ) %>%
+      #récupération des chroniques réalisées et calcul des chroniques de référence
       mutate(
         data = purrr::pmap(
           .l = list(ref = data, deb = DEBUT, fin = FIN, meca = MECANISME, meth = METHODE, entt = CODE_ENTITE, site = CODE_SITE, variante = VARIANTE, signe = SIGNE)
           , .f = function(ref, deb, fin, meca, meth, entt, site, variante, signe, ts = tbl_cdc, prev = tbl_prev)
           {
 
+            #affichage des caractéristiques de l'effacement ou report
             print(ref)
             print(as_datetime(deb))
             print(as_datetime(fin))
@@ -163,7 +173,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                      , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
                    )) == 0)
             {
-              warning('courbe de charge manquante : impossible de calculer le contrôle du réalisé')
+              warning("courbe de charge manquante : impossible de calculer la chronique d'effacement ou report")
               tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer())
 
             }else{
@@ -171,7 +181,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
               as.tibble(
                 do.call(
                   args = case_when(
-
+                    #puissance moyenne sur la demi-heure ronde précédant le DMO
                     meth == 'RECTANGLE' & meca == 'MA' ~
 
                       list(
@@ -187,7 +197,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                                      , .before = 'PAS') %>%
                           rename(REALISE = PUISSANCE)
                       )
-
+                    #puissance moyenne minimum, resp. maximum, entre la période précédant et la période suivant l'effacement, resp. le report
                     , meth == 'RECTANGLE' & meca == 'NEBEF' ~
 
                       list(
@@ -207,7 +217,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                           ) %>%
                           rename(REALISE = PUISSANCE)
                       )
-
+                    #chronique de prévision transmise par l'opérateur d'effacement
                     , meth == 'PREVISION' & meca %in% c('MA','NEBEF') ~
 
                       list(
@@ -238,7 +248,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                           ) %>%
                           transmute(MECANISME, CODE_ENTITE,CODE_SITE, HORODATE = HORODATE.y, HORODATE_UTC = HORODATE_UTC.y, REALISE = PUISSANCE.y, REFERENCE = PUISSANCE.x, PAS = PAS.y)
                       )
-
+                    #puissance moyenne ou médiane, des 4 mêmes jours de semaine éligibles passées ou des 10 derniers jours éligibles passés
                     , meth == 'HISTORIQUE' & meca %in% c('MA','NEBEF') ~
 
                       list(
@@ -284,13 +294,38 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
   }
 
   #aggrégation des tbl_cdc par entité
-  tbl_cdcagr = tbl_cdc %>%
+  tbl_cdcRefAgr = tbl_cdcRef %>%
     group_by(CODE_ENTITE,HORODATE,HORODATE_UTC) %>%
-    summarise(PUISSANCE = sum(PUISSANCE)) %>%
+    summarise(
+      PUISSANCE = sum(PUISSANCE)
+      , CAPA_MAX_H_ENTITE = sum(CAPA_MAX_H_SITE)
+    ) %>%
     ungroup()
 
-  #recalage du volume d'effacement sur la capacité totale de l'entité
-
+  # #recalage du volume d'effacement sur la capacité totale de l'entité
+  #
+  # mutate(
+  #   `PREVISION INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REFERENCE))) < as.duration(FIN - DEBUT)%/%dseconds(int_step)
+  #   , `COURBE DE CHARGE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$PUISSANCE))) < as.duration(FIN - DEBUT)%/%dseconds(int_step)
+  # )
+  #
+  # if(any(with(tbl_cdcref,`PREVISION INCOMPLETE`|`COURBE DE CHARGE INCOMPLETE`)))
+  # {
+  #   dplyr::filter(tbl_cdcref, `PREVISION INCOMPLETE`|`COURBE DE CHARGE INCOMPLETE`) %>%
+  #     dplyr::select(CODE_ENTITE,CODE_SITE,DEBUT,FIN) %>%
+  #     {
+  #       warning(
+  #         paste(
+  #           capture.output(
+  #             {
+  #               cat('Courbe(s) de charge ou de prévision manquante(s)\n Contrôle du réalisé impossible pour les activations suivantes :\n')
+  #               print(., len = nrow(.))
+  #             }
+  #           )
+  #           , collapse = '\n')
+  #       )
+  #     }
+  # }
 
 }
 #   tbl_cdccrmc1<-list()
