@@ -8,125 +8,21 @@ map(.x = list.files(path = paste0(getwd(),'/R'), pattern = '[^Main.R]',full.name
 
 # Chargement des données  -------------------------------------------------
 
-tbl_cdc = LoadCdC(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '^NEBEF.*_(20180127|20180203|20180210|20180217|20180224).*.csv', full.names = TRUE), dossiers = NULL)
+tbl_cdc = read_cdc(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '^NEBEF.*_(20180127|20180203|20180210|20180217|20180224).*.csv', full.names = TRUE), dossiers = NULL)
 
-tbl_eff = LoadEffacements(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '(OA_GRD|PEC_GRD)', full.names = TRUE), dossiers = NULL)
+tbl_eff = read_eff(fichiers = list.files(recursive = TRUE, path = paste0(getwd(),'/data-raw/'), pattern = '(OA_GRD|PEC_GRD)', full.names = TRUE), dossiers = NULL)
 
-tbl_sites = LoadPerimetre(dossiers = paste0(getwd(),'/data-raw/201802'))
+tbl_sites = read_perim(dossiers = paste0(getwd(),'/data-raw/201802'))
 
-tbl_entt = LoadListeEntt(dossiers =  paste0(getwd(),'/data-raw/201802'))
+tbl_entt = read_entt(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
-tbl_homol = LoadSitesHomol(dossiers =  paste0(getwd(),'/data-raw/201802'))
+tbl_homol = read_homol(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
-tbl_indhist = LoadIndHist(dossiers  =  paste0(getwd(),'/data-raw/', c('201712','201801','201802')))
+tbl_indhist = read_indispo(dossiers  =  paste0(getwd(),'/data-raw/', c('201712','201801','201802')))
 
-tbl_prev = LoadPrev(dossiers =  paste0(getwd(),'/data-raw/201802'))
+tbl_prev = read_prev(dossiers =  paste0(getwd(),'/data-raw/201802'))
 
-test = fuzzy_left_join(
-  x = mutate(tbl_eff, DATE = as_date(DEBUT, tz='CET'))
-  , y = tbl_entt
-  , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-  , match_fun = list(`==`,`==`,`>=`,`<`)
-) %>%
-  #application de la méthode du rectangle par défaut
-  replace_na(list(METHODE = 'RECTANGLE')) %>%
-  transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO) %>%
-  #ajout des sites rattachés aux entités
-  fuzzy_left_join(
-    y = tbl_sites
-    , by = c('MECANISME','CODE_ENTITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-    , match_fun = list(`==`,`==`,`>=`,`<`)
-  ) %>%
-  transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x, METHODE, DATE, DEBUT = DEBUT.x, FIN = FIN.x, SIGNE, DMO, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT) %>%
-  # Un site ne peut être rattaché à une entité certifiée par des méthodes autres que RECTANGLE que s'il est homologué à ces méthodes
-  fuzzy_left_join(
-    y = tbl_homol
-    , by = c('MECANISME','CODE_SITE', 'DATE' = 'DEBUT', 'DATE' = 'FIN')
-    , match_fun = list(`==`,`==`,`>=`,`<`)
-  ) %>%
-  dplyr::filter(!(METHODE.x != 'RECTANGLE' & METHODE.y != METHODE.x)) %>%
-  transmute(
-    MECANISME = MECANISME.x
-    , CODE_ENTITE
-    , CODE_SITE = CODE_SITE.x
-    , CAPA_MAX_H_SITE
-    , TYPE_CONTRAT
-    , METHODE = METHODE.x
-    #si la méthode est HISTORIQUE, la variante par défaut est MOY10J (la plus répandue; utile ?)
-    , VARIANTE = if_else(condition = METHODE.x == 'HISTORIQUE' & is.na(VARIANTE), true = 'MOY10J', false =  VARIANTE)
-    , DEBUT = DEBUT.x
-    , FIN = FIN.x
-    , SIGNE
-    , DMO
-  ) %>%
-  distinct() %>% #sites homologués à d'autres méthodes que le rectangle
-  #fusion avec les tables d'indisponibilité
-  fuzzyjoin::fuzzy_left_join(
-    y = tbl_indhist
-    , by = c('MECANISME','CODE_ENTITE','CODE_SITE','DEBUT' = 'DATE')
-    , match_fun = list(`==`,`==`,`==`,`>=`)
-  ) %>%
-  transmute(MECANISME = MECANISME.x, CODE_ENTITE = CODE_ENTITE.x,CODE_SITE = CODE_SITE.x, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO, DATE_INDHIST = DATE) %>%
-  group_by(MECANISME, CODE_ENTITE, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DMO) %>%
-  nest() %>%
-  #ajout des journées d'effacement et reports passées du site dans l'historique d'indisponibilité
-  {
-    mutate(.data = .
-           , data = pmap(
-             .l = list(x = data, y = CODE_SITE, z = METHODE, t = DEBUT)
-             , .f = function(x, y , z, t, u = transmute(., CODE_SITE, DATE_INDHIST = as_date(DEBUT, tz = 'CET')))
-             {
-               if(z == 'HISTORIQUE')
-               {
-                 x %>%
-                   bind_rows(subset(u, CODE_SITE == y & DATE_INDHIST < as_date(t), DATE_INDHIST)) %>%
-                   distinct()
-               }else{tibble(DATE_INDHIST = as_date(NA))}
-             }
-           )
-    )
-  } %>%
-  #identification des journées utilisées comme historique pour la méthode HISTORIQUE
-  mutate(
-    data = pmap(
-      .l = list(x = data, y = DEBUT, z = METHODE, t = VARIANTE)
-      , .f = function(x,y,z,t)
-      {
-        tibble(
-          DATE_HIST = as_date(
-            unlist(
-              case_when(
-                z == 'HISTORIQUE' & t %in% c('MOY4S','MED4S') ~ list(as_date(setdiff(x = seq.Date(from = as_date(as_datetime(y)) - weeks(1), length.out = 52, by = '-1 week'), y = as_date(x$DATE_INDHIST))[1:4]))
-                , z == 'HISTORIQUE' & t %in% c('MOY10J','MED10J') ~ list(as_date(setdiff(x = seq.Date(from = as_date(as_datetime(y)) - days(1), length.out = 365, by = '-1 day'), y = as_date(x$DATE_INDHIST))[1:10]))
-                , TRUE ~ list(as_date(NA))
-              )
-            )
-          )
-        )
-      }
-    )
-  ) %>%
-  #identification des périodes de référence en fonction des méthodes
-  mutate(
-    data = purrr::pmap(
-      .l = list(x = data, y = DEBUT, z = FIN, t = MECANISME, u = METHODE, v = DMO)
-      , .f = function(x,y,z,t,u,v)
-      {
-        tibble(
-          PERIODE_REFERENCE = do.call(
-            args = case_when(
-              t == 'MA' & u == 'RECTANGLE' ~ list(c(lubridate::floor_date(as_datetime(y) - dseconds(v) - dminutes(30), unit = '30 minutes')%--%lubridate::floor_date(as_datetime(y) - dseconds(v), unit = '30 minutes'))) #arrondir au pas 30 minute précédent
-              , t == 'NEBEF' & u == 'RECTANGLE' ~ list(c((as_datetime(y) - min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2)))%--%as_datetime(y),as_datetime(z)%--%(as_datetime(z) + min(as.duration(as_datetime(z) - as_datetime(y)), dhours(2))))) #arrondir au pas 30 minute précédent
-              , u == 'PREVISION' ~ list(c(as_datetime(y)%--%as_datetime(z)))
-              , u == 'HISTORIQUE' ~ list(c((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z))))))
-              , TRUE ~ list(c(as.interval(NA)))
-            )
-            , what = 'c'
-          )
-        )
-      }
-    )
-  )
+tbl_cdcRef = create_ref(tbl_cdc = tbl_cdc, tbl_sites = tbl_sites, tbl_eff = tbl_eff, tbl_entt = tbl_entt, tbl_homol = tbl_homol, tbl_indhist = tbl_indhist, tbl_prev = tbl_prev)
 
 
 ref = subset(test,MECANISME == 'NEBEF' & METHODE == 'RECTANGLE' & !is.na(CODE_SITE), data)[[1]][[1]]

@@ -154,15 +154,15 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
           {
 
             #affichage des caractéristiques de l'effacement ou report
-            print(ref)
-            print(as_datetime(deb))
-            print(as_datetime(fin))
-            print(meca)
-            print(meth)
-            print(entt)
-            print(site)
-            print(variante)
-            print(if_else(signe < 0, 'report', 'effacement'))
+
+            print(paste0('\nPERIODE\t: ', as_datetime(deb)%--%as_datetime(fin)))
+            print(paste0('\nMECANISME\t: ', meca))
+            print(paste0('\nMETHODE\t: ',meth))
+            print(paste0('\nENTITE\t: ',entt))
+            print(paste0('\nSITE\t: ',site))
+            print(paste0(if_else(meth == 'HISTORIQUE', str_c('\nVARIANTE\t: ',variante),'')))
+            print(paste0('\nSENS\t: ', if_else(signe < 0, 'REPORT', 'EFFACEMENT')))
+            print(paste0('\nPERIODE DE REFERENCE\t:', ref))
 
             if(
               nrow(ts %>%
@@ -174,6 +174,17 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                    )) == 0)
             {
               warning("courbe de charge manquante : impossible de calculer la chronique d'effacement ou report")
+              # warning(
+              #           paste(
+              #             capture.output(
+              #               {
+              #                 cat("Courbe(s) de charge manquante(s)\n impossible de calculer les chroniques d'effacement ou report suivants :\n")
+              #                 # print(., len = nrow(.))
+              #
+              #               }
+              #             )
+              #             , collapse = '\n')
+              #         )
               tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer())
 
             }else{
@@ -291,6 +302,31 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
           }
         )
       )
+  }
+
+  tbl_cdcRef %>%
+  mutate(
+     `CHRONIQUE DE REFERENCE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REFERENCE))) < as.duration(FIN - DEBUT)%/%dseconds(unique(data$PAS))
+     , `CHRONIQUE DE REALISE INCOMPLETE` = map_dbl(data, ~ sum(!is.na(.$REALISE))) < as.duration(FIN - DEBUT)%/%dseconds(unique(data$PAS))
+  )
+
+  if(any(with(tbl_cdcRef,`CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`)))
+  {
+    dplyr::filter(tbl_cdcRef, `CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`) %>%
+      dplyr::select(CODE_ENTITE,CODE_SITE,DEBUT,FIN) %>%
+      {
+        warning(
+          paste(
+            capture.output(
+              {
+                cat("Courbe(s) de charge réalisée ou de référence incomplète(s) sur la période d'effacement ou report")
+                print(subset(., `CHRONIQUE DE REFERENCE INCOMPLETE`|`CHRONIQUE DE REALISE INCOMPLETE`, data)[[1]][which(is.na(REALISE)|is.na(REFERENCE)), 'HORODATE_UTC'])
+                #print(., len = nrow(.))
+              }
+            )
+            , collapse = '\n')
+        )
+      }
   }
 
   #aggrégation des tbl_cdc par entité
