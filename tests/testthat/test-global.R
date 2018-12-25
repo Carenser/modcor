@@ -324,9 +324,8 @@ test2 = dplyr::filter(test,MECANISME == 'NEBEF' & !is.na(CODE_SITE)) %>%
 
 library(plotly)
 
-p = test3 %>%
+p = do.call(args = test2$data,what = rbind) %>%
   gather(key = 'TYPE', value = 'PUISSANCE', - MECANISME, -CODE_ENTITE, -CODE_SITE, - HORODATE, -HORODATE_UTC, - PAS) %>%
-  ggplot(mapping = aes(x = HORODATE_UTC, y = PUISSANCE, col = TYPE, text = str_c(CODE_ENTITE, CODE_SITE))) +
-  geom_line() +
-  labs(title = text)
+  ggplot(mapping = aes(x = HORODATE_UTC, y = PUISSANCE, col = CODE_SITE, linetype = TYPE)) +
+  geom_line()
 ggplotly(p, tooltip = c('PUISSANCE','HORODATE_UTC'))

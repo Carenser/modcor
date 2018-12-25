@@ -14,7 +14,7 @@
 #' @export
 #'
 #' @examples
-CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist, tbl_prev){
+create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist, tbl_prev){
 
   if(nrow(tbl_eff)==0){
     warning('Aucune entité activée au cours de la période de calcul')
@@ -163,15 +163,17 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
                      , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
                    )) == 0)
             {
-              print('courbe de charge manquante : impossible de calculer la courbe de référence')
+              warning('courbe de charge manquante : impossible de calculer le contrôle du réalisé')
               tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer())
 
             }else{
+
               as.tibble(
                 do.call(
                   args = case_when(
 
                     meth == 'RECTANGLE' & meca == 'MA' ~
+
                       list(
                         ts %>%
                           dplyr::filter(
@@ -239,37 +241,38 @@ CRModeCorrige <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_
 
                     , meth == 'HISTORIQUE' & meca %in% c('MA','NEBEF') ~
 
-                      list(ts %>%
-                             dplyr::filter(
-                               MECANISME == meca
-                               , CODE_ENTITE == entt
-                               , CODE_SITE == site
-                               , HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE)
-                             ) %>%
-                             mutate(HORODATE_UTC = floor_date(as_datetime(deb), 'day') + dhours(hour(HORODATE_UTC)) + dminutes(minute(HORODATE_UTC))) %>%
-                             dplyr::group_by(MECANISME,CODE_ENTITE,CODE_SITE,HORODATE_UTC) %>%
-                             summarise(
-                               REFERENCE = case_when(
-                                 variante %in% c('MOY10J','MOY4S') ~ mean(PUISSANCE)
-                                 , variante %in% c('MED10J','MED4S') ~ median(PUISSANCE)
-                                 , TRUE ~ NA_real_
-                               )
-                             ) %>%
-                             dplyr::ungroup() %>%
-                             dplyr::full_join(
-                               y = ts %>%
-                                 dplyr::filter(
-                                   MECANISME == meca
-                                   , CODE_ENTITE == entt
-                                   , CODE_SITE == site
-                                   , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
-                                 )
-                               , by = c('MECANISME','CODE_ENTITE','CODE_SITE','HORODATE_UTC')
-                             ) %>%
-                             transmute(MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, REALISE = PUISSANCE, REFERENCE, PAS)
+                      list(
+                        ts %>%
+                          dplyr::filter(
+                            MECANISME == meca
+                            , CODE_ENTITE == entt
+                            , CODE_SITE == site
+                            , HORODATE_UTC %within% as.list(ref$PERIODE_REFERENCE)
+                          ) %>%
+                          mutate(HORODATE_UTC = floor_date(as_datetime(deb), 'day') + dhours(hour(HORODATE_UTC)) + dminutes(minute(HORODATE_UTC))) %>%
+                          dplyr::group_by(MECANISME,CODE_ENTITE,CODE_SITE,HORODATE_UTC) %>%
+                          summarise(
+                            REFERENCE = case_when(
+                              variante %in% c('MOY10J','MOY4S') ~ mean(PUISSANCE)
+                              , variante %in% c('MED10J','MED4S') ~ median(PUISSANCE)
+                              , TRUE ~ NA_real_
+                            )
+                          ) %>%
+                          dplyr::ungroup() %>%
+                          dplyr::full_join(
+                            y = ts %>%
+                              dplyr::filter(
+                                MECANISME == meca
+                                , CODE_ENTITE == entt
+                                , CODE_SITE == site
+                                , HORODATE_UTC %within% as.list(as_datetime(deb)%--%as_datetime(fin))
+                              )
+                            , by = c('MECANISME','CODE_ENTITE','CODE_SITE','HORODATE_UTC')
+                          ) %>%
+                          transmute(MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, REALISE = PUISSANCE, REFERENCE, PAS)
                       )
+
                     , TRUE ~ list(tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer()))
-                    # , TRUE ~ tibble(MECANISME = NA_character_, CODE_ENTITE = NA_character_, CODE_SITE = NA_character_, HORODATE = as_datetime(NA_integer_), HORODATE_UTC = as_datetime(NA_integer_), REALISE = NA_real_, REFERENCE = NA_real_, PAS = NA_integer_)
                   )
                   , what = 'cbind'
                 )
