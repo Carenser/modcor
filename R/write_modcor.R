@@ -1,7 +1,7 @@
 #' Fonction d'écriture des chroniques d'effacement ou report au format csv prévu dans les règles MA/NEBEF SI
 #'
-#' @param x un tible dataframe contenant les chroniques d'effacement par site
-#' @param path le répertoire de sauvegarde du fichier généré
+#' @param tbl_chron un tible dataframe contenant les chroniques d'effacement par site
+#' @param char_path le répertoire de sauvegarde du fichier généré
 #' @import tidyverse
 #' @return un fichier par mécanisme, semaine et pas de temps au format csv et conforme aux règles SI
 #' @export
