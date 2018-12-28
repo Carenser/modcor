@@ -3,7 +3,7 @@
 #' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
 #' @param fichiers un vecteur contenant les noms des fichiers de périmètre  (facultatif)
 #'
-#' @return un dataframe comprenant 5 colonnes : DEBUT, FIN, MECANISME, CODE_ENTITE, CODE_SITE, CAPACITE_MAX_H_SITE, CATEGORIE, TYPE_CONTRAT
+#' @return un dataframe comprenant 5 colonnes : DEBUT, FIN, MECANISME, CODE_ENTITE, CODE_SITE, CODE_EIC_GRD, CAPACITE_MAX_H_SITE, CATEGORIE, TYPE_CONTRAT
 #' @export
 #' @import tidyverse
 #' @import lubridate
@@ -92,6 +92,7 @@ read_perim<-function(fichiers = NULL, dossiers){
                 dplyr::transmute(
                   CODE_ENTITE = dplyr::case_when(y == 'MA' ~ CODE_EDA, y == 'NEBEF' ~ CODE_EDE, TRUE ~ NA_character_)
                   , CODE_SITE = stringr::str_c(TYPE_SITE,ID_SITE,sep='')
+                  , CODE_EIC_GRD
                   , CAPA_MAX_H_SITE
                   , TYPE_CONTRAT
                   , CATEGORIE
