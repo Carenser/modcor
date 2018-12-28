@@ -1,10 +1,10 @@
 Package: modcor
-Title: What the Package Does (one line, title case)
-Version: 0.0.0.9000
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-Depends: R (>= 3.4.4), fuzzyjoin, lubridate, tidyverse
-License: What license is it under?
+Title: mise en oeuvre du modèle corrigé
+Version: 3.0
+Authors@R: person("Carenser", "One", email = "usermail@domain.com", role = c("aut", "cre"))
+Description: Prise en compte des programmes de report
+Depends: R (>= 3.5.1)
+License: Licence
 Encoding: UTF-8
 LazyData: true
 Suggests: testthat
