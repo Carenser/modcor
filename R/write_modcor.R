@@ -3,7 +3,7 @@
 #' @param x un tible dataframe contenant les chroniques d'effacement par site
 #' @param path le répertoire de sauvegarde du fichier généré
 #' @import tidyverse
-#' @return 
+#' @return un fichier par mécanisme, semaine et pas de temps au format csv et conforme aux règles SI
 #' @export
 #'
 #' @examples

@@ -371,7 +371,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
     #     , collapse = '\n')
     #   , immediate. = TRUE
     # )
-    # 
+
     #controle du réalisé par entité
     tbl_RefEntt = tbl_refSite %>%
       unnest(data, .preserve = ref) %>%
@@ -393,7 +393,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
             message(paste0('\nMETHODE\t\t: ',meth))
             message(paste0('\nENTITE\t\t: ',entt))
             message(paste0('\nSENS\t\t: ', if_else(signe < 0, 'REPORT', 'EFFACEMENT')))
-            if_else(meth == 'RECTANGLE'){message(paste0('\nREFERENCE\t: ', paste(ref$PERIODE_REFERENCE, collapse = ' '),'\n'))}
+            if(meth == 'RECTANGLE'){message(paste0('\nREFERENCE\t: ', paste(ref$PERIODE_REFERENCE, collapse = ' '),'\n'))}
             
             case_when(
               
