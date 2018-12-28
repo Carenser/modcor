@@ -6,7 +6,7 @@ args <- commandArgs(trailingOnly = TRUE)
 dir_data <- gsub(x = args[1], pattern = "\\\\", replacement = "/")
 # dir_script <- gsub(x = args[2], pattern = "\\\\", replacement = "/")
 
-dir_data = '/travail/u_d33071/R/MyPack/modcor/data-raw/201802'
+dir_data = '~/R/MyPack/modcor/data-raw/201802'
 
 # installation des librairies nécessaires
 if(!'modcor' %in% installed.packages()[,"Package"])
@@ -66,7 +66,7 @@ message(capture.output(decompt))
 
 # Export au format prévu dans les règles SI -------------------------------
 
-message("Ecriture des fichiers csv de chroniques d'effacement ou report")
+message("\nEcriture des fichiers csv de chroniques d'effacement ou report")
 time.Start <- Sys.time()
 write_modcor(tbl_chron = tbl_cdcRef, char_path = paste0(getwd(),'/data-raw'))
 decompt <- difftime(Sys.time(), time.Start, units = "auto")
