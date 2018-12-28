@@ -7,9 +7,9 @@
 read_homol(dossiers, fichiers = NULL)
 }
 \arguments{
-\item{fichiers}{un vecteur contenant les noms des fichiers de listing des sites homologués (facultatif)}
+\item{dossiers}{le nom du répertoire contenant les fichiers passés en paramètre}
 
-\item{dossier}{le nom du répertoire contenant les fichiers passés en paramètre}
+\item{fichiers}{un vecteur contenant les noms des fichiers de listing des sites homologués (facultatif)}
 }
 \value{
 un dataframe comprenant 6 colonnes : MECANISME, CODE_SITE, METHODE, DEBUT, FIN, VARIANTE

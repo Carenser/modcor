@@ -22,17 +22,10 @@ prog2chron(tbl_prog, int_step = 300, char_group = "groupe",
 \item{char_end}{character string giving datetime end name in UTC timezone from programs tibble}
 
 \item{char_oml}{character string giving minutes of offer mobilization leadtime from programs tibble}
-
-\item{timezone}{begin and end timezone from programs tibble}
 }
 \value{
 a dataframe with three columns : group, datetime_UTC and pow
 }
 \description{
 Transpose load curtailment program to chronicle with datetime
-}
-\examples{
-library(tidyverse)
-library(lubridate)
-prog2chron(tbl_prog = ex_tbl.OA, int_step = 300)
 }

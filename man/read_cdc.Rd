@@ -4,12 +4,12 @@
 \alias{read_cdc}
 \title{Chargement des fichiers de courbes de charges aux formats prévues dans les règles SI décrivant les flux en provenance des GRD à destination de RTE}
 \usage{
-read_cdc(fichiers, dossiers = NULL)
+read_cdc(dossiers, fichiers = NULL)
 }
 \arguments{
-\item{fichiers}{un vecteur contenant les noms des fichiers de courbes de charges}
-
 \item{dossiers}{le(s) nom(s) de répertoire contenant les fichiers passés en paramètre (facultatif)}
+
+\item{fichiers}{un vecteur contenant les noms des fichiers de courbes de charges}
 }
 \value{
 un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, HORODATE, HORODATE_UTC, PUISSANCE

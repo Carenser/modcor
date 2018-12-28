@@ -1,6 +1,6 @@
 #' Chargement des fichiers de périmètre de flexibilités aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
-#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param dossiers le nom du répertoire contenant les fichiers passés en paramètre
 #' @param fichiers un vecteur contenant les noms des fichiers de périmètre  (facultatif)
 #'
 #' @return un dataframe comprenant 5 colonnes : DEBUT, FIN, MECANISME, CODE_ENTITE, CODE_SITE, CODE_EIC_GRD, CAPACITE_MAX_H_SITE, CATEGORIE, TYPE_CONTRAT
@@ -8,7 +8,7 @@
 #' @import tidyverse
 #' @import lubridate
 #' @examples
-read_perim<-function(fichiers = NULL, dossiers){
+read_perim<-function(dossiers, fichiers = NULL){
 
   if(is.null(fichiers))
   {
@@ -118,6 +118,7 @@ read_perim<-function(fichiers = NULL, dossiers){
 #' @import tidyverse
 #' @examples
 read_eff <- function(dossiers, fichiers = NULL){
+
   if(is.null(fichiers))
   {
     fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")
@@ -263,13 +264,22 @@ read_eff <- function(dossiers, fichiers = NULL){
 #' @import tidyverse
 #' @import lubridate
 #' @examples
-read_cdc<-function(fichiers, dossiers = NULL){
+read_cdc<-function(dossiers, fichiers = NULL){
+
+  if(is.null(fichiers))
+  {
+    fichiers = list.files(full.names = TRUE, path = dossiers,pattern = "^CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv$|^NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv$")
+
+    dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+    fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
+  }
 
   if(is.null(dossiers))
   {
     dossiers = stringr::str_extract(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
     fichiers = stringr::str_remove(string = fichiers,pattern = '([/]?[^/]+[/]{1})+')
   }
+
 
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv$|^NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv$")))
@@ -533,7 +543,7 @@ read_prev<-function(dossiers, fichiers = NULL){
 
 #' Chargement des fichiers de listing des entités aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
-#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param dossiers le nom du répertoire contenant les fichiers passés en paramètre
 #' @param fichiers un vecteur contenant les noms des fichiers de listing des entités  (facultatif)
 #'
 #' @return un dataframe comprenant 5 colonnes : MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN
@@ -648,7 +658,7 @@ read_entt<-function(dossiers, fichiers = NULL){
 
 #' Chargement des fichiers de listing des sites homologués aux méthodes historique et prévision aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
-#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param dossiers le nom du répertoire contenant les fichiers passés en paramètre
 #' @param fichiers un vecteur contenant les noms des fichiers de listing des sites homologués (facultatif)
 #'
 #' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_SITE, METHODE, DEBUT, FIN, VARIANTE
@@ -656,7 +666,7 @@ read_entt<-function(dossiers, fichiers = NULL){
 #' @import tidyverse
 #' @import lubridate
 #' @examples
-read_homol<-function(dossiers,fichiers = NULL){
+read_homol<-function(dossiers, fichiers = NULL){
 
   if(is.null(fichiers))
   {
@@ -747,7 +757,7 @@ read_homol<-function(dossiers,fichiers = NULL){
 
 #' Chargement des fichiers des journées d'indisponibilité par entité et site soumis à la méthodes historique aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD
 #'
-#' @param dossier le nom du répertoire contenant les fichiers passés en paramètre
+#' @param dossiers le nom du répertoire contenant les fichiers passés en paramètre
 #' @param fichiers un vecteur contenant les noms des fichiers des journées d'indisponibilité (facultatif)
 #'
 #' @return un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, DATE
@@ -819,16 +829,4 @@ read_indispo<-function(dossiers, fichiers = NULL){#on charge le dernier fichier 
         )
       }
   }
-}
-
-
-LoadPEIF<-function(dossier=""){}
-
-
-logprint<-function(logText, logFileName = NULL){
-
-  if(is.null(logFileName))
-    logFileName = paste0(getwd(), '/Exec-', format(Sys.time(), '%Y%m%d%H%M%S'),'.log')
-
-  write.table(logText, logFileName, append = TRUE, row.names = FALSE, col.names = FALSE, quote = FALSE)
 }

@@ -4,12 +4,12 @@
 \alias{read_perim}
 \title{Chargement des fichiers de périmètre de flexibilités aux formats prévues dans les règles SI décrivant les flux en provenance de RTE à destination des GRD}
 \usage{
-read_perim(fichiers = NULL, dossiers)
+read_perim(dossiers, fichiers = NULL)
 }
 \arguments{
-\item{fichiers}{un vecteur contenant les noms des fichiers de périmètre  (facultatif)}
+\item{dossiers}{le nom du répertoire contenant les fichiers passés en paramètre}
 
-\item{dossier}{le nom du répertoire contenant les fichiers passés en paramètre}
+\item{fichiers}{un vecteur contenant les noms des fichiers de périmètre  (facultatif)}
 }
 \value{
 un dataframe comprenant 5 colonnes : DEBUT, FIN, MECANISME, CODE_ENTITE, CODE_SITE, CODE_EIC_GRD, CAPACITE_MAX_H_SITE, CATEGORIE, TYPE_CONTRAT

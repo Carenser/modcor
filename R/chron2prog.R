@@ -5,6 +5,7 @@
 #' @param char_pow character string giving power name in timeseries tibble
 #' @param char_datetime character string giving datetime name in UTC timezone from timeseries tibble
 #' @param tbl_ts tibble timeseries which contains load curtailment chronicle
+#' @param char_oml character string giving variable name of the offer mobilization leadtime
 #'
 #' @export
 #'
@@ -13,19 +14,15 @@
 #' @return a dataframe with three columns : group, begin(included) and end(excluded)
 #'
 #' @examples
-#' library(tidyverse)
-#' library(lubridate)
-#' chron2prog(tbl_ts = ex_tbl.PEC, int_step = 1800)
-#' chron2prog(ex_tbl.PER, int_step =  600)
 chron2prog <- function(tbl_ts, int_step = 1800, char_group = 'groupe', char_pow = 'puissance', char_datetime = 'horodate_UTC', char_oml = 'dmo')
 {
-  
+
   if(nrow(tbl_ts)==0)
   {
     tibble::tibble(group = character(), begin = as_datetime(numeric()), end = as_datetime(numeric()), sign = integer(), oml = integer())
-    
+
   }else{
-    
+
     tbl_ts %>%
       dplyr::rename(group = !!char_group, datetime = !!char_datetime, pow = !!char_pow, oml = !!char_oml) %>%
       dplyr::mutate(sign=sign(pow)) %>%

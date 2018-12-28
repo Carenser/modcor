@@ -7,9 +7,9 @@
 read_indispo(dossiers, fichiers = NULL)
 }
 \arguments{
-\item{fichiers}{un vecteur contenant les noms des fichiers des journées d'indisponibilité (facultatif)}
+\item{dossiers}{le nom du répertoire contenant les fichiers passés en paramètre}
 
-\item{dossier}{le nom du répertoire contenant les fichiers passés en paramètre}
+\item{fichiers}{un vecteur contenant les noms des fichiers des journées d'indisponibilité (facultatif)}
 }
 \value{
 un dataframe comprenant 6 colonnes : MECANISME, CODE_ENTITE, CODE_SITE, DATE

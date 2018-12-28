@@ -18,16 +18,12 @@ chron2prog(tbl_ts, int_step = 1800, char_group = "groupe",
 \item{char_pow}{character string giving power name in timeseries tibble}
 
 \item{char_datetime}{character string giving datetime name in UTC timezone from timeseries tibble}
+
+\item{char_oml}{character string giving variable name of the offer mobilization leadtime}
 }
 \value{
 a dataframe with three columns : group, begin(included) and end(excluded)
 }
 \description{
 Transpose load curtailment chronicle to program with begin and end datetimes
-}
-\examples{
-library(tidyverse)
-library(lubridate)
-chron2prog(tbl_ts = ex_tbl.PEC, int_step = 1800)
-chron2prog(ex_tbl.PER, int_step =  600)
 }

@@ -7,9 +7,9 @@
 read_entt(dossiers, fichiers = NULL)
 }
 \arguments{
-\item{fichiers}{un vecteur contenant les noms des fichiers de listing des entités  (facultatif)}
+\item{dossiers}{le nom du répertoire contenant les fichiers passés en paramètre}
 
-\item{dossier}{le nom du répertoire contenant les fichiers passés en paramètre}
+\item{fichiers}{un vecteur contenant les noms des fichiers de listing des entités  (facultatif)}
 }
 \value{
 un dataframe comprenant 5 colonnes : MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN

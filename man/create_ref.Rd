@@ -21,6 +21,8 @@ create_ref(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist,
 \item{tbl_indhist}{un tibble dataframe contenant les jours d'indisponibilité à la méthode HISTORIQUE par site et entité}
 
 \item{tbl_prev}{un tibble dataframe contenant les chroniques de prévision par site et entité pour la méthode PREVISION}
+
+\item{lgl_parallel}{un booleen définissant le mode de calcul ; séquentiel par défaut}
 }
 \value{
 un nested tibble dataframe contenant les chroniques d'effacement associées à chaque programme d'effacement

@@ -5,8 +5,9 @@ vcs.ignore.lib: TRUE
 vcs.ignore.src: FALSE
 external.packages:
     tidyverse
-    lubridate
     fuzzyjoin
+    furrr
+    lubridate
 local.repos: 
 load.external.packages.on.startup: TRUE
 ignored.packages: 
