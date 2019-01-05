@@ -136,7 +136,7 @@ read_eff <- function(dossiers, fichiers = NULL){
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^OA_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$|^PEC_GRD_([0-9]{8})_[0-9A-Z]{16}_([0-9]{14}).csv$")))
   {
-    warning("aucun fichier d'activation conforme à la nomenclature prévue dans les règles SI MA ou NEBEF")
+    warning("aucun fichier d'activation conforme à la nomenclature prévue dans les règles SI MA ou NEBEF", immediate. = TRUE)
     return(tibble(MECANISME = character(), CODE_ENTITE = character(), DEBUT = as_datetime(integer()), FIN = as_datetime(integer()), SIGNE = integer(), DMO = dminutes(integer())))
 
   }else{
@@ -284,7 +284,7 @@ read_cdc<-function(dossiers, fichiers = NULL){
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^CRMA_[0-9]{4}_[0-9]{8}_[0-9]{6}_[0-9]{8}.csv$|^NEBEF_CRS_GRD_[0-9]{8}_[0-9A-Z]{16}_[0-9]{14}.csv$")))
   {
-    warning('aucun fichier de CdC conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
+    warning('aucun fichier de CdC conforme à la nomenclature prévue dans les règles SI MA ou NEBEF', immediate. = TRUE)
     return(tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE_UTC = as_datetime(integer()),HORODATE = as_datetime(integer()), PUISSANCE = double(), PAS = integer()))
 
   }else{
@@ -426,7 +426,7 @@ read_prev<-function(dossiers, fichiers = NULL){
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^(NEBEF|MA)_PREV_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")))
   {
-    warning('aucun fichier de courbe de prévision conforme à la nomenclature prévue dans les règles SI MA ou NEBEF')
+    warning('aucun fichier de courbe de prévision conforme à la nomenclature prévue dans les règles SI MA ou NEBEF', immediate. = TRUE)
     return(tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), HORODATE_UTC = as_datetime(integer()),HORODATE = as_datetime(integer()), PUISSANCE = double(), PAS = integer()))
 
   }else{
@@ -570,7 +570,7 @@ read_entt<-function(dossiers, fichiers = NULL){
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^LISTE_EDA_GRD_([0-9]{6})_(DECLARATIF|FINAL)_([0-9]{14}).csv$|^LISTE_EDE_GRD_([0-9]{14}).csv$")))
   {
-    warning("Aucun fichier de listing des entités conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.")
+    warning("Aucun fichier de listing des entités conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.", immediate. = TRUE)
     return(tibble(MECANISME=character(),CODE_ENTITE=character(),METHODE=character(),DEBUT=as_date(integer()),FIN=as_date(integer()),VARIANTE=character()))
 
   }else{
@@ -685,7 +685,7 @@ read_homol<-function(dossiers, fichiers = NULL){
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^(MA|NEBEF)_SITES_HOMOL_GRD_[0-9A-Z]{16}_([0-9]{14}).csv$")))
   {
-    warning("Aucun fichier d'homologation des sites conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.")
+    warning("Aucun fichier d'homologation des sites conforme à la nomenclature prévue dans les règles SI MA ou NEBEF. La méthode par défaut (RECTANGLE) sera appliquée à l'ensemble des entités.", immediate. = TRUE)
     return(tibble(MECANISME=character(),CODE_SITE=character(),METHODE=character(),DEBUT=as_date(integer()),FIN=as_date(integer()),VARIANTE=character()))
 
   }else{
@@ -784,7 +784,7 @@ read_indispo<-function(dossiers, fichiers = NULL){#on charge le dernier fichier 
   #Si aucun fichier n'est conforme à la nomenclature alors pas de traitement
   if(!any(stringr::str_detect(string = fichiers,pattern = "^(MA|NEBEF)_INDHIST_GRD_[0-9A-Z]{16}_([0-9]{8})_([0-9]{14}).csv$")))
   {
-    warning("Aucun fichier d'indisponibilité de site conforme à la nomenclature prévue dans les règles SI MA ou NEBEF.")
+    warning("Aucun fichier d'indisponibilité de site conforme à la nomenclature prévue dans les règles SI MA ou NEBEF.", immediate. = TRUE)
     return(tibble(MECANISME=character(),CODE_ENTITE=character(),CODE_SITE=character(),DATE=as_date(integer())))
 
   }else{
