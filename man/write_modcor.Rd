@@ -7,9 +7,9 @@
 write_modcor(tbl_chron, char_path)
 }
 \arguments{
-\item{x}{un tible dataframe contenant les chroniques d'effacement par site}
+\item{tbl_chron}{un tible dataframe contenant les chroniques d'effacement par site}
 
-\item{path}{le répertoire de sauvegarde du fichier généré}
+\item{char_path}{le répertoire de sauvegarde du fichier généré}
 }
 \value{
 un fichier par mécanisme, semaine et pas de temps au format csv et conforme aux règles SI
