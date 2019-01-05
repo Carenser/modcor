@@ -1,3 +1,4 @@
+# library(furrr)
 # library(tidyverse)
 # library(lubridate)
 # library(fuzzyjoin)
@@ -5,7 +6,7 @@
 #
 # options(warning.length = 5000L, tibble.print_max = Inf)
 #
-# map(.x = list.files(path = paste0(getwd(),'/R'), pattern = '[^Main.R]',full.names = TRUE),.f = function(x){source(file = x, prompt.echo = FALSE, verbose = FALSE, print.eval = FALSE, echo = FALSE)})
+# map(.x = list.files(path = paste0(getwd(),'/R'), pattern = '[^main.R]',full.names = TRUE),.f = function(x){source(file = x, prompt.echo = FALSE, verbose = FALSE, print.eval = FALSE, echo = FALSE)})
 #
 # # Chargement des données  -------------------------------------------------
 #
@@ -42,6 +43,7 @@
 #   , tbl_homol = tbl_homol
 #   , tbl_indhist = tbl_indhist
 #   , tbl_prev = tbl_prev
+#   , lgl_details = TRUE
 # )
 #
 # decompt <- difftime(Sys.time(), time.Start, units = "auto")
@@ -65,18 +67,21 @@
 # # print(decompt)
 #
 #
-# # Export au format prévu dans les règles SI -------------------------------
-#
+# Export au format prévu dans les règles SI -------------------------------
+# 
 # time.Start <- Sys.time()
 # cat("Ecriture des fichiers csv de chroniques d'effacement ou report")
-# write_modcor(tbl_chron = tbl_cdcRef, char_path = paste0(getwd(),'/data-raw'))
+# write_modcor(tbl_chron = tbl_cdcRef, char_path = paste0(getwd(),'/data-raw'), lgl_all = TRUE)
 # decompt <- difftime(Sys.time(), time.Start, units = "auto")
 # print(decompt)
-#
-# p = do.call(args = test2$data,what = rbind) %>%
-#   gather(key = 'TYPE', value = 'PUISSANCE', - MECANISME, -CODE_ENTITE, -CODE_SITE, - HORODATE, -HORODATE_UTC, - PAS) %>%
-#   ggplot(mapping = aes(x = HORODATE_UTC, y = PUISSANCE, col = CODE_SITE, linetype = TYPE)) +
+# 
+# q = tbl_cdcRef %>%
+#   ggplot(mapping = aes(x = HEURE, y = CHRONIQUE, col = CODE_SITE)) +
 #   geom_line()
-# ggplotly(p, tooltip = c('PUISSANCE','HORODATE_UTC'))
-#
-#
+# ggplotly(q, tooltip = c('CHRONIQUE','HEURE'))
+# 
+# p = tbl_cdcRef %>%
+#   gather(key = 'TYPE', value = 'PUISSANCE', - MECANISME, -CODE_ENTITE, -CODE_SITE, -CODE_EIC_GRD, - DATE, -HEURE, -PAS) %>%
+#   ggplot(mapping = aes(x = HEURE, y = PUISSANCE, col = CODE_SITE, linetype = TYPE)) +
+#   geom_line()
+# ggplotly(p, tooltip = c('PUISSANCE','HEURE'))
