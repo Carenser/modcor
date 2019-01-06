@@ -18,32 +18,32 @@
 #'
 #' @examples
 create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist, tbl_prev, lgl_parallel = FALSE, lgl_details = FALSE){
-  
+
   options(future.globals.maxSize = 4000*1024^2)
-  
+
   if(lgl_parallel)
   {
     if(Sys.info()["sysname"] == "Linux")
     {
       plan(multiprocess)
     }
-    
+
     if(Sys.info()["sysname"] == "Windows")
     {
       plan(multisession)
     }
   }else{
-    
+
     plan(sequential)
   }
-  
+
   if(nrow(tbl_eff)==0){
-    
+
     warning('Aucune entité activée au cours de la période de calcul')
     return(tibble(MECANISME = character(), CODE_ENTITE = character(), CODE_SITE = character(), CODE_EIC_GRD = character(), TYPE_CONTRAT = character(), DATE = as_date(integer()), HEURE = as_datetime(integer()), CHRONIQUE = double(), PAS = double(), ref = list()))
-    
+
   }else{
-    
+
     #récupération de la méthode de certification associée à un effacement
     tbl_refSite =
       fuzzy_left_join(
@@ -148,7 +148,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                   , u == 'PREVISION' ~ list(c(as_datetime(y)%--%as_datetime(z)))
                   #les points passés selon la variante, 4 même jours de semaine éligibles ou 10 derniers jours éligibles, aux mêmes heures que celles de la période d'effacement ou report
                   , u == 'HISTORIQUE' ~ list(c((as_date(x$DATE_HIST) + dhours(hour(as_datetime(y))) + dminutes(minute(as_datetime(y))))%--%(as_date(x$DATE_HIST) + dhours(hour(as_datetime(z))) + dminutes(minute(as_datetime(z))))))
-                  
+
                   , TRUE ~ list(c(as.interval(NA)))
                 )
                 , what = 'c'
@@ -191,20 +191,20 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
             if(meth == 'HISTORIQUE'){message(paste0(str_c('\nVARIANTE\t: ',variante)))}
             message(paste0('\nSENS\t\t: ', if_else(signe < 0, 'REPORT', 'EFFACEMENT')))
             message(paste0('\nREFERENCE\t: ', paste(ref$PERIODE_REFERENCE, collapse = ' '),'\n'))
-            
+
             if(nrow(ts) == 0)
             {
               warning(immediate. = TRUE, "courbe de charge manquante -> impossible de calculer la chronique d'effacement ou report")
               tibble(HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer())
-              
+
             }else{
-              
+
               as.tibble(
                 do.call(
                   args = case_when(
                     #puissance moyenne sur la demi-heure ronde précédant le DMO
                     meth == 'RECTANGLE' & meca == 'MA' ~
-                      
+
                       list(
                         ts %>%
                           dplyr::filter(HORODATE_UTC %within% as.list(floor_date(as_datetime(deb),unit = period(num = 30, units = 'minutes'))%--%(ceiling_date(as_datetime(fin), unit = period(num = 30, units = 'minutes')) - dseconds(1)))) %>%
@@ -215,7 +215,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                       )
                     #puissance moyenne minimum, resp. maximum, entre la période précédant et la période suivant l'effacement, resp. le report
                     , meth == 'RECTANGLE' & meca == 'NEBEF' ~
-                      
+
                       list(
                         ts %>%
                           dplyr::filter(HORODATE_UTC %within% as.list(floor_date(as_datetime(deb),unit = period(num = 30, units = 'minutes'))%--%(ceiling_date(as_datetime(fin), unit = period(num = 30, units = 'minutes')) - dseconds(1)))) %>%
@@ -230,7 +230,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                       )
                     #chronique de prévision transmise par l'opérateur d'effacement
                     , meth == 'PREVISION' & meca %in% c('MA','NEBEF') ~
-                      
+
                       list(
                         prev %>%
                           dplyr::filter(
@@ -250,7 +250,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                       )
                     #puissance moyenne ou médiane, des 4 mêmes jours de semaine éligibles passées ou des 10 derniers jours éligibles passés
                     , meth == 'HISTORIQUE' & meca %in% c('MA','NEBEF') ~
-                      
+
                       list(
                         ts %>%
                           dplyr::filter(HORODATE_UTC %within% as.list(int_start(ref$PERIODE_REFERENCE)%--%(int_end(ref$PERIODE_REFERENCE) - dseconds(1)))
@@ -272,7 +272,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                           ) %>%
                           transmute(HORODATE, HORODATE_UTC, REALISE = PUISSANCE, REFERENCE, PAS)
                       )
-                    
+
                     , TRUE ~ list(tibble(HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), REALISE = double(), REFERENCE = double(), PAS = integer()))
                   )
                   , what = 'cbind'
@@ -282,7 +282,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
           }
         )
       )
-    
+
     #"\nCourbe de réalisé ou de référence incomplète -> chronique d'effacement ou report partiellement calculée\n\n"
     cat(
       tbl_refSite %>%
@@ -300,14 +300,14 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                   add_column(groupe = "", puissance = 1, dmo = NA_integer_) %>%
                   chron2prog(int_step = unique(ref$PAS)) %>%
                   transmute(PERIODE_MANQUANTE = begin%--%end)
-                
+
               }else{
-                
+
                 tibble(PERIODE_MANQUANTE = floor_date(as_datetime(deb),unit = period(num = 30, units = 'minutes'))%--%(ceiling_date(as_datetime(fin), unit = period(num = 30, units = 'minutes'))))
               }
             }
           )
-          
+
           , realIncomp = pmap(
             .l = list(ref = data, deb = as_datetime(DEBUT), fin = as_datetime(FIN))
             , function(ref,deb,fin)
@@ -321,9 +321,9 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
                   add_column(groupe = "", puissance = 1, dmo = NA_integer_) %>%
                   chron2prog(int_step = unique(ref$PAS)) %>%
                   transmute(PERIODE_MANQUANTE = begin%--%end)
-                
+
               }else{
-                
+
                 tibble(PERIODE_MANQUANTE = floor_date(as_datetime(deb),unit = period(num = 30, units = 'minutes'))%--%(ceiling_date(as_datetime(fin), unit = period(num = 30, units = 'minutes'))))
               }
             }
@@ -354,7 +354,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
         ) %>%
         {subset(., !is.na(miss), 'miss')[[1]]}
     )
-    
+
     if(any(map_int(.x = tbl_refSite$data,.f = nrow) > 0))
     {
       #controle du réalisé par entité
@@ -375,7 +375,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
             .l = list(meca = MECANISME, entt = CODE_ENTITE, meth = METHODE, signe = SIGNE, ref = data)
             , .f = function(meca, entt, meth, signe, ref, ts = dplyr::filter(tbl_cdc, CODE_ENTITE %in% unique(tbl_refSite$CODE_ENTITE) & CODE_SITE %in% unique(tbl_refSite$CODE_SITE)))
             {
-              
+
               #affichage des caractéristiques de l'effacement ou report
               message(paste0('\nMECANISME\t: ', meca))
               message(paste0('\nMETHODE\t\t: ',meth))
@@ -383,28 +383,28 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
               #message(paste0('\nPERIODE\t\t: ',as_datetime(deb)%--%as_datetime(fin)))
               message(paste0('\nSENS\t\t: ', if_else(signe < 0, 'REPORT', 'EFFACEMENT')))
               if(meth == 'RECTANGLE'){message(paste0('\nREFERENCE\t: ', paste(ref$ref[[1]]$PERIODE_REFERENCE, collapse = ' '),'\n'))}
-              
+
               if(nrow(ts) == 0)
               {
                 warning(immediate. = TRUE, "courbe de charge manquante -> impossible de calculer la chronique d'effacement ou report")
                 tibble(HORODATE = as_datetime(integer()), HORODATE_UTC = as_datetime(integer()), PAS = integer(), ref = list(), REALISE = double(), REFERENCE = double())
-                
+
               }else{
-                mutate(.data = ref, 
+                mutate(.data = ref,
                        REFERENCE = case_when(
-                         
+
                          #puissance moyenne sur la demi-heure ronde précédant le DMO
                          meth == 'RECTANGLE' & meca == 'MA' ~
-                           
+
                            dplyr::filter(ts, MECANISME == meca & CODE_ENTITE == entt & HORODATE_UTC %within% as.list(ref[[1]]$PERIODE_REFERENCE[1])) %>%
                            dplyr::group_by(MECANISME, CODE_ENTITE, HORODATE, HORODATE_UTC, PAS) %>%
                            dplyr::summarise(PUISSANCE = sum(PUISSANCE, na.rm = TRUE)) %>%
                            ungroup() %>%
                            {mean(select(.,PUISSANCE)[[1]])}
-                         
+
                          #puissance moyenne minimum, resp. maximum, entre la période précédant et la période suivant l'effacement, resp. le report
                          , meth == 'RECTANGLE' & meca == 'NEBEF' ~
-                           
+
                            signe * min(
                              dplyr::filter(ts, MECANISME == meca & CODE_ENTITE == entt & HORODATE_UTC %within% as.list(ref[[1]]$PERIODE_REFERENCE[1])) %>%
                                dplyr::group_by(MECANISME, CODE_ENTITE, HORODATE, HORODATE_UTC, PAS) %>%
@@ -425,9 +425,9 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
             }
           )
         )
-      
+
       #recalage des volumes par sites et calcul des chroniques d'effacement au pas 30 minutes
-      tbl_refSite = tbl_refSite %>%
+      tbl_refSite =  tbl_refSite %>%
         unnest(.preserve = ref) %>%
         inner_join(
           y = select(unnest(data = tbl_RefEntt), MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN, SIGNE, HORODATE, HORODATE_UTC, REFERENCE, REALISE, CAPA_MAX_H_ENTITE)
@@ -436,32 +436,37 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
         ) %>%
         mutate(
           VOLUME = REFERENCE - REALISE
-          #recalage du volume d'effacement sur la capacité maximale de l'entité
           , DATE = as_date(HORODATE)
           , HEURE = floor_date(HORODATE, unit = '30 minutes')
         ) %>%
         group_by(MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN, SIGNE, HORODATE_UTC) %>%
-        mutate(VOLUME_ENTITE = sum(REFERENCE_ENTITE - REALISE_ENTITE)) %>%
-        group_by(MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN, SIGNE, DATE, HEURE) %>%
-        mutate(SOMME_CHRONIQUE = mean(VOLUME)) %>%
-        group_by(MECANISME, CODE_ENTITE, CODE_SITE, CODE_EIC_GRD, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DATE, HEURE) %>%
         mutate(
-          CHRONIQUE_ENTITE = if_else(
+          VOLUME_ENTITE = REFERENCE_ENTITE - REALISE_ENTITE
+          , SOMME_VOLUME = sum(VOLUME)
+        ) %>%
+        group_by(MECANISME, CODE_ENTITE, METHODE, DEBUT, FIN, SIGNE, DATE, HEURE) %>%
+        mutate(
+          SOMME_CHRONIQUE = mean(SOMME_VOLUME)
+          , CHRONIQUE_ENTITE = if_else(
             condition = SIGNE < 0
             , true =  pmax(pmin(0,mean(VOLUME_ENTITE))
                            , if_else(condition = MECANISME == 'NEBEF' , true = - as.double(CAPA_MAX_H_ENTITE), false = -Inf))
             , false =  pmin(pmax(0,mean(VOLUME_ENTITE)), if_else(condition = MECANISME == 'NEBEF', true = as.double(CAPA_MAX_H_ENTITE), false = Inf))
           )
-          , RATIO = CHRONIQUE_ENTITE/SOMME_CHRONIQUE
+        ) %>%
+        group_by(MECANISME, CODE_ENTITE, CODE_SITE, CODE_EIC_GRD, METHODE, VARIANTE, DEBUT, FIN, SIGNE, DATE, HEURE) %>%
+        mutate(
+
+          RATIO = CHRONIQUE_ENTITE/SOMME_CHRONIQUE
           , CHRONIQUE = if_else(
             condition = SIGNE < 0
-            , true =  pmin(0,mean(VOLUME)) * if_else(is.nan(RATIO),1,RATIO)
-            , false =  pmax(0,mean(VOLUME)) * if_else(is.nan(RATIO),1,RATIO)
-          )
+            , true =  pmin(0,mean(VOLUME))
+            , false =  pmax(0,mean(VOLUME))
+          ) * if_else(is.nan(RATIO),1,RATIO,1)
         )
-      
+
       if(lgl_details){
-        
+
         tbl_refSite %>%
           group_by(MECANISME, CODE_ENTITE, CAPA_MAX_H_ENTITE, CODE_EIC_GRD, CODE_SITE, CAPA_MAX_H_SITE, TYPE_CONTRAT, METHODE, VARIANTE, DMO, SIGNE, DEBUT, FIN) %>%
           nest(HORODATE, HORODATE_UTC, REALISE, REFERENCE, VOLUME, REALISE_ENTITE, REFERENCE_ENTITE, VOLUME_ENTITE, PAS, RATIO, DATE, HEURE, CHRONIQUE, ref) %>%
@@ -470,7 +475,7 @@ create_ref <- function(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_ind
             , data = map(.x = data,.f = ~ select(.,- ref) %>% rename(PAS_CHRON = PAS))
             , PAS = 1800
           )
-        
+
       }else{
         suppressWarnings(
           tbl_refSite %>%

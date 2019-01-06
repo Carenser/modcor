@@ -4,12 +4,14 @@
 \alias{write_modcor}
 \title{Fonction d'écriture des chroniques d'effacement ou report au format csv prévu dans les règles MA/NEBEF SI}
 \usage{
-write_modcor(tbl_chron, char_path)
+write_modcor(tbl_chron, char_path, lgl_all = FALSE)
 }
 \arguments{
 \item{tbl_chron}{un tible dataframe contenant les chroniques d'effacement par site}
 
 \item{char_path}{le répertoire de sauvegarde du fichier généré}
+
+\item{lgl_all}{un booléen précisant si le fichier comporte tous les sites ou uniquement les sites en contrat CARD}
 }
 \value{
 un fichier par mécanisme, semaine et pas de temps au format csv et conforme aux règles SI

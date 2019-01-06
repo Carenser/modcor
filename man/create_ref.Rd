@@ -5,7 +5,7 @@
 \title{Fonction de calcul des chroniques de référence}
 \usage{
 create_ref(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist,
-  tbl_prev, lgl_parallel = FALSE)
+  tbl_prev, lgl_parallel = FALSE, lgl_details = FALSE)
 }
 \arguments{
 \item{tbl_cdc}{un tibble dataframe contenant les chroniques réalisées par site et entité}
@@ -23,6 +23,8 @@ create_ref(tbl_cdc, tbl_sites, tbl_eff, tbl_entt, tbl_homol, tbl_indhist,
 \item{tbl_prev}{un tibble dataframe contenant les chroniques de prévision par site et entité pour la méthode PREVISION}
 
 \item{lgl_parallel}{un booleen définissant le mode de calcul ; séquentiel par défaut}
+
+\item{lgl_details}{un boolen definissant le niveau de détails en sortie ; synthètique par défaut}
 }
 \value{
 un nested tibble dataframe contenant les chroniques d'effacement associées à chaque programme d'effacement
